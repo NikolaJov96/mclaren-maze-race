@@ -11,10 +11,12 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         os.mkdir(path)
 
-    num_championship_repeats = 50
+    num_championship_repeats = 1000
 
     for shuffle_tracks in [True, False]:
         # Run championships with and without track shuffling
+
+        print('Campionship: {}/2'.format(1 if shuffle_tracks else 2))
 
         drivers = [
             YoungDriver('YoungDriver', speed_rounding=40, max_distance=8, learning_rate=0.25),
@@ -22,7 +24,7 @@ if __name__ == '__main__':
             YoungDriverNearestState('NearestState', speed_rounding=40, max_distance=8, learning_rate=0.25)
         ]
 
-        championship = Championship(drivers, Level.Young, shuffle_tracks=shuffle_tracks)
+        championship = Championship(drivers, Level.Young, shuffle_tracks=shuffle_tracks, verbose=True)
         championship_results, race_results, race_times = \
             championship.run_championship(num_repeats=num_championship_repeats)
 

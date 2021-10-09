@@ -1,4 +1,5 @@
 from copy import deepcopy
+from random import shuffle
 import scipy.stats as ss
 from time import time as time_fn
 
@@ -71,6 +72,7 @@ def race(driver=None, car=None, track=None, track_index=None, level=Level.Learne
             break
 
     # Race is complete, update driver with post race data
+    print('race : calling update_after_race')
     driver.update_after_race(track.correct_turns)
 
     return driver, race_time, finished
@@ -238,7 +240,7 @@ class Season:
 
 
 class Championship:
-    def __init__(self, drivers: List[Driver], level: Level):
+    def __init__(self, drivers: List[Driver], level: Level, shuffle_tracks=False, verbose=False):
         if len(np.unique([driver.name for driver in drivers])) != len(drivers):
             raise ValueError('Driver names aren''t unique')
         self.driver_to_car_dict = {driver: Car.get_car_for_level(level) for driver in drivers}
@@ -246,20 +248,26 @@ class Championship:
         self.driver_params = [deepcopy(driver.__dict__) for driver in drivers]
         self.season = Season(level)
         self.level = level
+        self.shuffle_tracks = shuffle_tracks
+        self.verbose = verbose
 
     def run_championship(self, track_indices=None, num_repeats=1):
         if track_indices is None:
-            track_indices = range(self.season.number_of_tracks)
+            track_indices = list(range(self.season.number_of_tracks))
 
         finishing_positions = {driver.name: np.zeros((num_repeats, len(track_indices))) for driver in self.drivers}
         all_race_times = {driver.name: np.zeros((num_repeats, len(track_indices))) for driver in self.drivers}
 
         # Run each race
         for repeat in range(num_repeats):
+            if self.verbose:
+                print('\rRepeats: {}/{}'.format(repeat + 1, num_repeats), end='')
             if repeat > 0:          # reset
                 for driver, param_dict in zip(self.drivers, self.driver_params):
                     for key, param in param_dict.items():
                         setattr(driver, key, deepcopy(param))
+                if self.shuffle_tracks:
+                    shuffle(track_indices)
 
             for race_num, track_idx in enumerate(track_indices):
                 track = self.season.get_track(track_idx)
@@ -269,6 +277,8 @@ class Championship:
                     finishing_positions[driver.name][repeat, race_num] = position
                 for driver, time in race_times.items():
                     all_race_times[driver.name][repeat, race_num] = time
+        if self.verbose:
+            print()
 
         # Determine the championship winner
         championship_points = np.hstack([np.sum(positions, axis=1)[:, None]
@@ -329,6 +339,9 @@ class Championship:
             # If all drivers have finshed the race, end
             if all(driver.name in drivers_finished for driver in self.drivers):
                 break
+
+        for driver in self.drivers:
+            driver.update_after_race(track.correct_turns)
 
         # Work out the finishing order
         ranks = ss.rankdata(list(race_times.values()), method='min')

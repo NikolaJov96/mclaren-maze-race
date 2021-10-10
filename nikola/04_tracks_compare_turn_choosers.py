@@ -203,22 +203,53 @@ class FavorSameDirectionTurnChooser(TurnChooser):
         return "Favor same action ({})".format(self.max_distance)
 
 
-def get_turn_choosers():
-    return [
-        RandomTurnChooser(),
-        SingleActionTurnChooser(Action.TurnLeft, 'TurnLeft'),
-        SingleActionTurnChooser(Action.TurnRight, 'TurnRight'),
-        DefaultTurnChooser(),
-        RealTimeDefaultTurnChooser(),
-        MultipleClosestPositionsTurnChooser(3),
-        BalanceLeftRightTurnChooser(8.0),
-        FavorSameDirectionTurnChooser(8.0)
-    ]
+class TurnCooserSet(Enum):
+    IncludeAll = 1
+    Realtime = 2
+    MultipleClosestPositions = 3
+    BalanceLeftRight = 4
 
 
-def run_test(all_tracks):
+def get_turn_choosers(turn_chooser_set: TurnCooserSet):
+    if turn_chooser_set == TurnCooserSet.IncludeAll:
+        return [
+            RandomTurnChooser(),
+            SingleActionTurnChooser(Action.TurnLeft, 'TurnLeft'),
+            SingleActionTurnChooser(Action.TurnRight, 'TurnRight'),
+            DefaultTurnChooser(),
+            RealTimeDefaultTurnChooser(),
+            MultipleClosestPositionsTurnChooser(3),
+            BalanceLeftRightTurnChooser(8.0),
+            FavorSameDirectionTurnChooser(8.0)
+        ]
+    elif turn_chooser_set == TurnCooserSet.Realtime:
+        return [
+            DefaultTurnChooser(),
+            RealTimeDefaultTurnChooser()
+        ]
+    elif turn_chooser_set == TurnCooserSet.MultipleClosestPositions:
+        return [
+            DefaultTurnChooser(),
+            MultipleClosestPositionsTurnChooser(2),
+            MultipleClosestPositionsTurnChooser(3),
+            MultipleClosestPositionsTurnChooser(4),
+            MultipleClosestPositionsTurnChooser(5),
+            MultipleClosestPositionsTurnChooser(6),
+        ]
+    elif turn_chooser_set == TurnCooserSet.BalanceLeftRight:
+        return [
+            DefaultTurnChooser(),
+            BalanceLeftRightTurnChooser(4.0),
+            BalanceLeftRightTurnChooser(6.0),
+            BalanceLeftRightTurnChooser(8.0),
+            BalanceLeftRightTurnChooser(10.0),
+            BalanceLeftRightTurnChooser(12.0),
+        ]
 
-    turn_choosers = get_turn_choosers()
+
+def run_test(all_tracks, turn_chooser_set):
+
+    turn_choosers = get_turn_choosers(turn_chooser_set)
 
     for track in all_tracks:
 
@@ -274,49 +305,53 @@ if __name__ == '__main__':
 
     num_test_runs = 200
 
-    all_tracks = TrackStore.load_all_tracks(level=Level.Young)
-    turn_choosers = get_turn_choosers()
+    for tun_chooser_set in TurnCooserSet:
 
-    per_track_data = []
-    per_track_cumulative_data = []
+        print('Running {}'.format(tun_chooser_set))
 
-    for i in range(num_test_runs):
-        shuffle(all_tracks)
-        per_track, per_track_cumulative = run_test(all_tracks)
-        per_track_data.append(per_track)
-        per_track_cumulative_data.append(per_track_cumulative)
+        all_tracks = TrackStore.load_all_tracks(level=Level.Young)
+        turn_choosers = get_turn_choosers(tun_chooser_set)
 
-    per_track_average = np.mean(per_track_data, axis=0)
-    per_track_cumulative_average = np.mean(per_track_cumulative_data, axis=0)
+        per_track_data = []
+        per_track_cumulative_data = []
 
-    # Plot results
-    num_tracks = len(all_tracks)
-    tracks = [i + 1 for i in range(num_tracks)]
-    ylim = (-0.05, 0.05)
-    y_ticks = [i / 10.0 for i in range(11)]
+        for i in range(num_test_runs):
+            shuffle(all_tracks)
+            per_track, per_track_cumulative = run_test(all_tracks, tun_chooser_set)
+            per_track_data.append(per_track)
+            per_track_cumulative_data.append(per_track_cumulative)
 
-    # Plot per track results
-    fig, ax = plt.subplots()
-    ax.set_title('Turn hit ratio per track')
-    for i, per_track in enumerate(per_track_average):
-        ax.plot(tracks, per_track, label=turn_choosers[i].name())
-    ax.set_xticks(tracks)
-    ax.set_ylim(ylim)
-    ax.set_yticks(y_ticks)
-    ax.legend()
-    ax.grid()
-    plt.savefig(os.path.join(path, 'per_track.png'))
-    plt.close(fig)
+        per_track_average = np.mean(per_track_data, axis=0)
+        per_track_cumulative_average = np.mean(per_track_cumulative_data, axis=0)
 
-    # Plot per track cumulative results
-    fig, ax = plt.subplots()
-    ax.set_title('Cumulative turn hit ratio')
-    for i, per_track_cumulative in enumerate(per_track_cumulative_average):
-        ax.plot(tracks, per_track_cumulative, label=turn_choosers[i].name())
-    ax.set_xticks(tracks)
-    ax.set_ylim(ylim)
-    ax.set_yticks(y_ticks)
-    ax.legend()
-    ax.grid()
-    plt.savefig(os.path.join(path, 'per_track_cumulative.png'))
-    plt.close(fig)
+        # Plot results
+        num_tracks = len(all_tracks)
+        tracks = [i + 1 for i in range(num_tracks)]
+        ylim = (-0.05, 0.05)
+        y_ticks = [i / 10.0 for i in range(11)]
+
+        # Plot per track results
+        fig, ax = plt.subplots()
+        ax.set_title('Turn hit ratio per track')
+        for i, per_track in enumerate(per_track_average):
+            ax.plot(tracks, per_track, label=turn_choosers[i].name())
+        ax.set_xticks(tracks)
+        ax.set_ylim(ylim)
+        ax.set_yticks(y_ticks)
+        ax.legend()
+        ax.grid()
+        plt.savefig(os.path.join(path, 'per_track_{}.png'.format(tun_chooser_set)))
+        plt.close(fig)
+
+        # Plot per track cumulative results
+        fig, ax = plt.subplots()
+        ax.set_title('Cumulative turn hit ratio')
+        for i, per_track_cumulative in enumerate(per_track_cumulative_average):
+            ax.plot(tracks, per_track_cumulative, label=turn_choosers[i].name())
+        ax.set_xticks(tracks)
+        ax.set_ylim(ylim)
+        ax.set_yticks(y_ticks)
+        ax.legend()
+        ax.grid()
+        plt.savefig(os.path.join(path, 'per_track_{}_cumulative.png'.format(tun_chooser_set)))
+        plt.close(fig)

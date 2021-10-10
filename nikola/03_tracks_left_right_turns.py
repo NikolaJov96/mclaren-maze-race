@@ -9,11 +9,23 @@ if __name__ == '__main__':
     path = sys.argv[0][:-3]
     if not os.path.exists(path):
         os.mkdir(path)
+
+    # Display number of left and right turns for each track
+    total_left_turns = 0
+    total_right_turns = 0
+    for i, track in enumerate(TrackStore.load_all_tracks(level=Level.Young)):
+        correct_turns = list(track.correct_turns.values())
+        left_turns = correct_turns.count(Action.TurnLeft)
+        total_left_turns += left_turns
+        right_turns = correct_turns.count(Action.TurnRight)
+        total_right_turns += right_turns
+        print('Track: {:2}  Left turns {:2}  Right turns: {:2}  Total left turns {:3}  Total right turns: {:3}'.format(
+            i + 1, left_turns, right_turns, total_left_turns, total_right_turns))
+
+    # Display left and right turn positions per track
     per_track_path = os.path.join(path, 'per_track')
     if not os.path.exists(per_track_path):
         os.mkdir(per_track_path)
-
-    # Display left and right turn positions per track
     for i, track in enumerate(TrackStore.load_all_tracks(level=Level.Young)):
 
         fig = plt.figure()

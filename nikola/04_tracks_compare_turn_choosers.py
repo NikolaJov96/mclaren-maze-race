@@ -42,7 +42,7 @@ class RandomTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "Random"
+        return 'Random'
 
 
 class SingleActionTurnChooser(TurnChooser):
@@ -57,7 +57,7 @@ class SingleActionTurnChooser(TurnChooser):
         self.store_choice(self.action == correct_action)
 
     def name(self):
-        return "Only " + self.action_name
+        return 'Only ' + self.action_name
 
 
 class DefaultTurnChooser(TurnChooser):
@@ -86,7 +86,7 @@ class DefaultTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "Default"
+        return 'Default'
 
 
 class RealTimeDefaultTurnChooser(TurnChooser):
@@ -108,7 +108,7 @@ class RealTimeDefaultTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "RealTimeDefault"
+        return 'RealTimeDefault'
 
 
 class MultipleClosestPositionsTurnChooser(TurnChooser):
@@ -140,7 +140,7 @@ class MultipleClosestPositionsTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "{} closest positions".format(self.num_positions)
+        return '{} closest positions'.format(self.num_positions)
 
 
 class BalanceLeftRightTurnChooser(TurnChooser):
@@ -172,7 +172,7 @@ class BalanceLeftRightTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "Left-right balance ({})".format(self.max_distance)
+        return 'Left-right balance ({})'.format(self.max_distance)
 
 
 class FavorSameDirectionTurnChooser(TurnChooser):
@@ -200,7 +200,66 @@ class FavorSameDirectionTurnChooser(TurnChooser):
         self.store_choice(action == correct_action)
 
     def name(self):
-        return "Favor same action ({})".format(self.max_distance)
+        return 'Favor same action ({})'.format(self.max_distance)
+
+
+from sklearn.neighbors import KNeighborsClassifier
+class KNNTurnChooser(TurnChooser):
+
+    def __init__(self, n):
+        super().__init__()
+
+        self.n = n
+        self.correct_turns = {}
+
+    def next_turn(self, position: Position, correct_action: Action):
+        action = None
+        if len(self.correct_turns) < self.n:
+            action = driver_rng().choice([Action.TurnLeft, Action.TurnRight])
+        else:
+            coordinates = [(p.row, p.column) for p in self.correct_turns]
+            labels = [0 if a == Action.TurnLeft else 1 for a in list(self.correct_turns.values())]
+            knn = KNeighborsClassifier(n_neighbors=self.n)
+            knn.fit(coordinates, labels)
+            prediction = knn.predict([(position.row, position.column)])
+            action = Action.TurnLeft if prediction == 0 else Action.TurnRight
+
+        self.correct_turns[position] = correct_action
+
+        self.store_choice(action == correct_action)
+
+    def name(self):
+        return 'KNN ({})'.format(self.n)
+
+
+class CombinedTurnChooser(TurnChooser):
+
+    def __init__(self):
+        super().__init__()
+
+        self.closes_point_tc = MultipleClosestPositionsTurnChooser(3)
+        self.left_right_tc = BalanceLeftRightTurnChooser(8.0)
+
+    def next_track(self):
+        self.closes_point_tc.next_track()
+        self.left_right_tc.next_track()
+
+    def next_turn(self, position: Position, correct_action: Action):
+        self.closes_point_tc.next_turn(position, correct_action)
+        self.left_right_tc.next_turn(position, correct_action)
+
+    def get_choice_ratio_per_track(self):
+        self.choices_per_track = \
+            self.left_right_tc.choices_per_track[:13] + self.closes_point_tc.choices_per_track[13:]
+        return super().get_choice_ratio_per_track()
+
+    def get_choice_ratio_per_track_cumulative(self):
+        self.choices_per_track = \
+            self.left_right_tc.choices_per_track[:13] + self.closes_point_tc.choices_per_track[13:]
+        return super().get_choice_ratio_per_track_cumulative()
+
+    def name(self):
+        return 'Left-right balance + 3 closest positions'
 
 
 class TurnCooserSet(Enum):
@@ -208,6 +267,8 @@ class TurnCooserSet(Enum):
     Realtime = 2
     MultipleClosestPositions = 3
     BalanceLeftRight = 4
+    KNN = 5
+    BestPicks = 6
 
 
 def get_turn_choosers(turn_chooser_set: TurnCooserSet):
@@ -220,7 +281,8 @@ def get_turn_choosers(turn_chooser_set: TurnCooserSet):
             RealTimeDefaultTurnChooser(),
             MultipleClosestPositionsTurnChooser(3),
             BalanceLeftRightTurnChooser(8.0),
-            FavorSameDirectionTurnChooser(8.0)
+            FavorSameDirectionTurnChooser(8.0),
+            KNNTurnChooser(3)
         ]
     elif turn_chooser_set == TurnCooserSet.Realtime:
         return [
@@ -245,6 +307,25 @@ def get_turn_choosers(turn_chooser_set: TurnCooserSet):
             BalanceLeftRightTurnChooser(10.0),
             BalanceLeftRightTurnChooser(12.0),
         ]
+    elif turn_chooser_set == TurnCooserSet.KNN:
+        return [
+            DefaultTurnChooser(),
+            KNNTurnChooser(2),
+            KNNTurnChooser(3),
+            KNNTurnChooser(4),
+            KNNTurnChooser(5),
+            KNNTurnChooser(6)
+        ]
+    elif turn_chooser_set == TurnCooserSet.BestPicks:
+        return [
+            DefaultTurnChooser(),
+            RealTimeDefaultTurnChooser(),
+            MultipleClosestPositionsTurnChooser(3),
+            BalanceLeftRightTurnChooser(8.0),
+            CombinedTurnChooser()
+        ]
+    else:
+        raise ValueError
 
 
 def run_test(all_tracks, turn_chooser_set):

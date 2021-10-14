@@ -1,7 +1,25 @@
 from imports import *
 
 
-class TrackerState:
+class TurnTracker:
+    """
+    Base class for turn tracking
+    """
+
+    def __init__(self):
+        self.correct_turns = {}
+
+    def new_race(self):
+        raise NotImplementedError
+
+    def new_track_state(self, track_state, is_final):
+        raise NotImplementedError
+
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        raise NotImplementedError
+
+
+class RealtimeTrackerState:
     """
     Base class for turn tracker states
     """
@@ -13,7 +31,7 @@ class TrackerState:
         raise NotImplementedError
 
 
-class DefaultTrackerState(TrackerState):
+class DefaultRealtimeTrackerState(RealtimeTrackerState):
     """
     Turn tracker state when no turns are being examined
     """
@@ -25,12 +43,12 @@ class DefaultTrackerState(TrackerState):
         if track_state.distance_ahead == 0 and \
                 track_state.distance_left > 0 and \
                 track_state.distance_right > 0:
-            return TurnJustTakenTrackerState(self.turn_tracker)
+            return TurnJustTakenRealtimeTrackerState(self.turn_tracker)
         else:
             return self
 
 
-class TurnJustTakenTrackerState(TrackerState):
+class TurnJustTakenRealtimeTrackerState(RealtimeTrackerState):
     """
     Turn tracker state when a turn has just been taken
     Used to determine which action (TurnLeft or TurnRight) was used
@@ -56,10 +74,10 @@ class TurnJustTakenTrackerState(TrackerState):
         else:
             raise ValueError
 
-        return CheckingTakenTurnTrackerState(self.turn_tracker, taken_action).new_track_state(track_state, is_final)
+        return CheckingTakenTurnRealtimeTrackerState(self.turn_tracker, taken_action).new_track_state(track_state, is_final)
 
 
-class CheckingTakenTurnTrackerState(TrackerState):
+class CheckingTakenTurnRealtimeTrackerState(RealtimeTrackerState):
     """
     Turn tracker state when waiting to reach the end of a straight
     to determine if the previous turn was correct
@@ -83,17 +101,17 @@ class CheckingTakenTurnTrackerState(TrackerState):
             self.turn_tracker.put_correct_turn(self.turn_position, action)
 
         # Immediately check if new default state is finished
-        return DefaultTrackerState(self.turn_tracker).new_track_state(track_state, False)
+        return DefaultRealtimeTrackerState(self.turn_tracker).new_track_state(track_state, False)
 
 
-class TurnTracker:
+class RealtimeTurnTracker(TurnTracker):
     """
     Class used to track correct turns in real time,
     without waiting for the end of the race
     """
 
     def __init__(self):
-        self.correct_turns = {}
+        super().__init__()
         self._current_state = None
         self._recent_car_positions = []
         self._this_race_correct_turns = {}
@@ -102,7 +120,7 @@ class TurnTracker:
         """
         Reset race-specific turn tracker parameters
         """
-        self._current_state = DefaultTrackerState(self)
+        self._current_state = DefaultRealtimeTrackerState(self)
         self._recent_car_positions = []
         self._this_race_correct_turns = {}
 
@@ -136,6 +154,24 @@ class TurnTracker:
         self.correct_turns[position] = action
         self._this_race_correct_turns[position] = action
 
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        assert correct_turns == self._this_race_correct_turns
+
+
+class DefaultTurnTracker(TurnTracker):
+    """
+    Default post-race updated turn tracker
+    """
+
+    def new_race(self):
+        pass
+
+    def new_track_state(self, track_state, is_final=False):
+        pass
+
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        self.correct_turns.update(correct_turns)
+
 
 if __name__ == '__main__':
 
@@ -150,9 +186,10 @@ if __name__ == '__main__':
                 return False
         return True
 
-    # Test the turn tracker on all of the available tracks
+    # Test the turn trackers on all of the available tracks
     # Test both individually on all tracks and cumulative through all tracks
-    global_turn_tracker = TurnTracker()
+    global_turn_tracker = RealtimeTurnTracker()
+    global_default_turn_tracker = DefaultTurnTracker()
 
     all_tracks = TrackStore.load_all_tracks(level=Level.Young)
     for track in all_tracks:
@@ -160,15 +197,17 @@ if __name__ == '__main__':
         position = track.start_position
         heading = track.start_heading
 
-        local_turn_tracker = TurnTracker()
+        local_turn_tracker = RealtimeTurnTracker()
         local_turn_tracker.new_race()
         global_turn_tracker.new_race()
+        global_default_turn_tracker.new_race()
 
         while not track.is_finished(position):
 
             track_state = track.get_state_for_position(position, heading)
             local_turn_tracker.new_track_state(track_state)
             global_turn_tracker.new_track_state(track_state)
+            global_default_turn_tracker.new_track_state(track_state)
 
             if track_state.distance_ahead > 0:
                 position, _, _ = track.get_new_position(position, 1, heading)
@@ -185,6 +224,11 @@ if __name__ == '__main__':
         track_state = track.get_state_for_position(position, heading)
         local_turn_tracker.new_track_state(track_state, is_final=True)
         global_turn_tracker.new_track_state(track_state, is_final=True)
+        global_default_turn_tracker.new_track_state(track_state, is_final=True)
+
+        local_turn_tracker.update_after_race(track.correct_turns)
+        global_turn_tracker.update_after_race(track.correct_turns)
+        global_default_turn_tracker.update_after_race(track.correct_turns)
 
         assert are_equivalent(local_turn_tracker.correct_turns, track.correct_turns)
         assert are_equivalent(local_turn_tracker._this_race_correct_turns, track.correct_turns)
@@ -197,13 +241,14 @@ if __name__ == '__main__':
     assert are_equivalent(global_turn_tracker.correct_turns, accumulated_correct_turns)
     assert are_equivalent(global_turn_tracker._this_race_correct_turns, track.correct_turns)
     assert global_turn_tracker.correct_turns == accumulated_correct_turns
+    assert global_turn_tracker.correct_turns == global_default_turn_tracker.correct_turns
 
     # Check deep copying
-    turn_tracker = TurnTracker()
+    turn_tracker = RealtimeTurnTracker()
     turn_tracker_copy = deepcopy(turn_tracker)
 
     turn_tracker.new_race()
-    assert isinstance(turn_tracker._current_state, DefaultTrackerState)
+    assert isinstance(turn_tracker._current_state, DefaultRealtimeTrackerState)
     turn_tracker.new_track_state(TrackState(
         distance_ahead=2,
         distance_left=0,
@@ -211,7 +256,7 @@ if __name__ == '__main__':
         distance_behind=0,
         position=Position(1, 0)
     ))
-    assert isinstance(turn_tracker._current_state, DefaultTrackerState)
+    assert isinstance(turn_tracker._current_state, DefaultRealtimeTrackerState)
     turn_tracker.new_track_state(TrackState(
         distance_ahead=1,
         distance_left=0,
@@ -219,7 +264,7 @@ if __name__ == '__main__':
         distance_behind=0,
         position=Position(1, 1)
     ))
-    assert isinstance(turn_tracker._current_state, DefaultTrackerState)
+    assert isinstance(turn_tracker._current_state, DefaultRealtimeTrackerState)
     turn_tracker.new_track_state(TrackState(
         distance_ahead=0,
         distance_left=1,
@@ -227,7 +272,7 @@ if __name__ == '__main__':
         distance_behind=1,
         position=Position(1, 2)
     ))
-    assert isinstance(turn_tracker._current_state, TurnJustTakenTrackerState)
+    assert isinstance(turn_tracker._current_state, TurnJustTakenRealtimeTrackerState)
     turn_tracker.new_track_state(TrackState(
         distance_ahead=1,
         distance_left=0,
@@ -235,7 +280,7 @@ if __name__ == '__main__':
         distance_behind=1,
         position=Position(2, 2)
     ))
-    assert isinstance(turn_tracker._current_state, CheckingTakenTurnTrackerState)
+    assert isinstance(turn_tracker._current_state, CheckingTakenTurnRealtimeTrackerState)
     turn_tracker.new_track_state(TrackState(
         distance_ahead=0,
         distance_left=1,
@@ -247,8 +292,8 @@ if __name__ == '__main__':
     turn_tracker_copy.new_race()
 
     assert len(turn_tracker.correct_turns) == 1
-    assert isinstance(turn_tracker._current_state, TurnJustTakenTrackerState)
+    assert isinstance(turn_tracker._current_state, TurnJustTakenRealtimeTrackerState)
     assert len(turn_tracker_copy.correct_turns) == 0
-    assert isinstance(turn_tracker_copy._current_state, DefaultTrackerState)
+    assert isinstance(turn_tracker_copy._current_state, DefaultRealtimeTrackerState)
 
     print('All is good!')

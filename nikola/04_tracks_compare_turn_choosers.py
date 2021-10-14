@@ -4,7 +4,7 @@ from random import shuffle
 from imports import *
 
 
-class TurnChooser:
+class TestTurnChooser:
 
     def __init__(self):
         self.choices_per_track = [[]]
@@ -34,7 +34,7 @@ class TurnChooser:
         raise NotImplementedError
 
 
-class RandomTurnChooser(TurnChooser):
+class RandomTestTurnChooser(TestTurnChooser):
 
     def next_turn(self, position: Position, correct_action: Action):
         action = driver_rng().choice([Action.TurnLeft, Action.TurnRight])
@@ -45,7 +45,7 @@ class RandomTurnChooser(TurnChooser):
         return 'Random'
 
 
-class SingleActionTurnChooser(TurnChooser):
+class SingleActionTestTurnChooser(TestTurnChooser):
 
     def __init__(self, action: Action, action_name):
         super().__init__()
@@ -60,7 +60,7 @@ class SingleActionTurnChooser(TurnChooser):
         return 'Only ' + self.action_name
 
 
-class DefaultTurnChooser(TurnChooser):
+class DefaultTestTurnChooser(TestTurnChooser):
 
     def __init__(self):
         super().__init__()
@@ -89,7 +89,7 @@ class DefaultTurnChooser(TurnChooser):
         return 'Default'
 
 
-class RealTimeDefaultTurnChooser(TurnChooser):
+class RealTimeDefaultTestTurnChooser(TestTurnChooser):
 
     def __init__(self):
         super().__init__()
@@ -111,7 +111,7 @@ class RealTimeDefaultTurnChooser(TurnChooser):
         return 'RealTimeDefault'
 
 
-class MultipleClosestPositionsTurnChooser(TurnChooser):
+class MultipleClosestPositionsTestTurnChooser(TestTurnChooser):
 
     def __init__(self, num_positions):
         super().__init__()
@@ -143,7 +143,7 @@ class MultipleClosestPositionsTurnChooser(TurnChooser):
         return '{} closest positions'.format(self.num_positions)
 
 
-class BalanceLeftRightTurnChooser(TurnChooser):
+class BalanceLeftRightTestTurnChooser(TestTurnChooser):
 
     def __init__(self, max_distance):
         super().__init__()
@@ -175,7 +175,7 @@ class BalanceLeftRightTurnChooser(TurnChooser):
         return 'Left-right balance ({})'.format(self.max_distance)
 
 
-class FavorSameDirectionTurnChooser(TurnChooser):
+class FavorSameDirectionTestTurnChooser(TestTurnChooser):
 
     def __init__(self, max_distance):
         super().__init__()
@@ -204,7 +204,7 @@ class FavorSameDirectionTurnChooser(TurnChooser):
 
 
 from sklearn.neighbors import KNeighborsClassifier
-class KNNTurnChooser(TurnChooser):
+class KNNTestTurnChooser(TestTurnChooser):
 
     def __init__(self, n):
         super().__init__()
@@ -232,13 +232,13 @@ class KNNTurnChooser(TurnChooser):
         return 'KNN ({})'.format(self.n)
 
 
-class CombinedTurnChooser(TurnChooser):
+class CombinedTestTurnChooser(TestTurnChooser):
 
     def __init__(self):
         super().__init__()
 
-        self.closes_point_tc = MultipleClosestPositionsTurnChooser(3)
-        self.left_right_tc = BalanceLeftRightTurnChooser(8.0)
+        self.closes_point_tc = MultipleClosestPositionsTestTurnChooser(3)
+        self.left_right_tc = BalanceLeftRightTestTurnChooser(8.0)
 
     def next_track(self):
         self.closes_point_tc.next_track()
@@ -274,55 +274,55 @@ class TurnCooserSet(Enum):
 def get_turn_choosers(turn_chooser_set: TurnCooserSet):
     if turn_chooser_set == TurnCooserSet.IncludeAll:
         return [
-            RandomTurnChooser(),
-            SingleActionTurnChooser(Action.TurnLeft, 'TurnLeft'),
-            SingleActionTurnChooser(Action.TurnRight, 'TurnRight'),
-            DefaultTurnChooser(),
-            RealTimeDefaultTurnChooser(),
-            MultipleClosestPositionsTurnChooser(3),
-            BalanceLeftRightTurnChooser(8.0),
-            FavorSameDirectionTurnChooser(8.0),
-            KNNTurnChooser(3)
+            RandomTestTurnChooser(),
+            SingleActionTestTurnChooser(Action.TurnLeft, 'TurnLeft'),
+            SingleActionTestTurnChooser(Action.TurnRight, 'TurnRight'),
+            DefaultTestTurnChooser(),
+            RealTimeDefaultTestTurnChooser(),
+            MultipleClosestPositionsTestTurnChooser(3),
+            BalanceLeftRightTestTurnChooser(8.0),
+            FavorSameDirectionTestTurnChooser(8.0),
+            KNNTestTurnChooser(3)
         ]
     elif turn_chooser_set == TurnCooserSet.Realtime:
         return [
-            DefaultTurnChooser(),
-            RealTimeDefaultTurnChooser()
+            DefaultTestTurnChooser(),
+            RealTimeDefaultTestTurnChooser()
         ]
     elif turn_chooser_set == TurnCooserSet.MultipleClosestPositions:
         return [
-            DefaultTurnChooser(),
-            MultipleClosestPositionsTurnChooser(2),
-            MultipleClosestPositionsTurnChooser(3),
-            MultipleClosestPositionsTurnChooser(4),
-            MultipleClosestPositionsTurnChooser(5),
-            MultipleClosestPositionsTurnChooser(6),
+            DefaultTestTurnChooser(),
+            MultipleClosestPositionsTestTurnChooser(2),
+            MultipleClosestPositionsTestTurnChooser(3),
+            MultipleClosestPositionsTestTurnChooser(4),
+            MultipleClosestPositionsTestTurnChooser(5),
+            MultipleClosestPositionsTestTurnChooser(6),
         ]
     elif turn_chooser_set == TurnCooserSet.BalanceLeftRight:
         return [
-            DefaultTurnChooser(),
-            BalanceLeftRightTurnChooser(4.0),
-            BalanceLeftRightTurnChooser(6.0),
-            BalanceLeftRightTurnChooser(8.0),
-            BalanceLeftRightTurnChooser(10.0),
-            BalanceLeftRightTurnChooser(12.0),
+            DefaultTestTurnChooser(),
+            BalanceLeftRightTestTurnChooser(4.0),
+            BalanceLeftRightTestTurnChooser(6.0),
+            BalanceLeftRightTestTurnChooser(8.0),
+            BalanceLeftRightTestTurnChooser(10.0),
+            BalanceLeftRightTestTurnChooser(12.0),
         ]
     elif turn_chooser_set == TurnCooserSet.KNN:
         return [
-            DefaultTurnChooser(),
-            KNNTurnChooser(2),
-            KNNTurnChooser(3),
-            KNNTurnChooser(4),
-            KNNTurnChooser(5),
-            KNNTurnChooser(6)
+            DefaultTestTurnChooser(),
+            KNNTestTurnChooser(2),
+            KNNTestTurnChooser(3),
+            KNNTestTurnChooser(4),
+            KNNTestTurnChooser(5),
+            KNNTestTurnChooser(6)
         ]
     elif turn_chooser_set == TurnCooserSet.BestPicks:
         return [
-            DefaultTurnChooser(),
-            RealTimeDefaultTurnChooser(),
-            MultipleClosestPositionsTurnChooser(3),
-            BalanceLeftRightTurnChooser(8.0),
-            CombinedTurnChooser()
+            DefaultTestTurnChooser(),
+            RealTimeDefaultTestTurnChooser(),
+            MultipleClosestPositionsTestTurnChooser(3),
+            BalanceLeftRightTestTurnChooser(8.0),
+            CombinedTestTurnChooser()
         ]
     else:
         raise ValueError
@@ -384,7 +384,7 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         os.mkdir(path)
 
-    num_test_runs = 200
+    num_test_runs = 1
 
     for tun_chooser_set in TurnCooserSet:
 

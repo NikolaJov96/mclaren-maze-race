@@ -43,11 +43,6 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         os.mkdir(path)
 
-    # Fixed young driver parameters
-    speed_rounding = 40
-    max_distance = 8
-    learning_rate = 0.25
-
     # Run one season with turn logger
     Season(Level.Rookie).race(RookieDriverLooged(
         'RD', race_logger_dir=os.path.join(path, 'race_logger')))

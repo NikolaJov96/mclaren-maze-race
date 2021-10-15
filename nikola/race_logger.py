@@ -18,7 +18,7 @@ class RaceLogger:
 
         self.actions = []
 
-        self.tunred_ok_ids = []
+        self.turned_ok_ids = []
         self.crashed_ids = []
         self.spun_ids = []
         self.safety_car_penalty_level = {}
@@ -42,7 +42,7 @@ class RaceLogger:
 
         # Result
         if result.turned_ok:
-            self.tunred_ok_ids.append(self.step_id + 0.5)
+            self.turned_ok_ids.append(self.step_id + 0.5)
         if result.crashed:
             self.crashed_ids.append(self.step_id + 0.5)
         if result.spun:
@@ -110,7 +110,7 @@ class RaceLogger:
         plot_scatter(self.end_of_straight_ids, y=1, c=(0.7, 0.7, 0.7))
         plot_scatter(self.crashed_ids, y=1, c=(0.0, 0.0, 0.0))
         plot_scatter(self.spun_ids, y=1, c=(1.0, 0.0, 0.5))
-        plot_scatter(self.tunred_ok_ids, y=1, c=(0.0, 1.0, 0.0))
+        plot_scatter(self.turned_ok_ids, y=1, c=(0.0, 1.0, 0.0))
         # Throttle, braking and turning
         light_throttle_ids = get_action_ids(self.actions, Action.LightThrottle)
         plot_scatter(light_throttle_ids, y=2, c=(1.0, 0.5, 0.5))

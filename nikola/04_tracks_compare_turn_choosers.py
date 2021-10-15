@@ -127,13 +127,13 @@ class MultipleClosestPositionsTestTurnChooser(TestTurnChooser):
             correct_actions = list(self.correct_turns.values())
 
             if distances[closest_ids[0]] == 0:
-                return correct_actions[closest_ids[0]]
-
-            left_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnLeft]
-            right_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnRight]
-            left_weight = sum(map(lambda d: 1.0 / d, distances[left_ids]))
-            right_weight = sum(map(lambda d: 1.0 / d, distances[right_ids]))
-            action = Action.TurnLeft if left_weight > right_weight else Action.TurnRight
+                action = correct_actions[closest_ids[0]]
+            else:
+                left_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnLeft]
+                right_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnRight]
+                left_weight = sum(map(lambda d: 1.0 / d, distances[left_ids]))
+                right_weight = sum(map(lambda d: 1.0 / d, distances[right_ids]))
+                action = Action.TurnLeft if left_weight > right_weight else Action.TurnRight
 
         self.correct_turns[position] = correct_action
 
@@ -384,7 +384,7 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         os.mkdir(path)
 
-    num_test_runs = 1
+    num_test_runs = 200
 
     for tun_chooser_set in TurnCooserSet:
 

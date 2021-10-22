@@ -259,7 +259,7 @@ class Car:
         return spun
 
     def get_state(self):
-        return CarState(speed=self.speed, heading=self.heading, drs_active=self.drs_active, tyre_choice=self.tyre_choice,
+        return CarState(speed=float(self.speed), heading=self.heading, drs_active=self.drs_active, tyre_choice=self.tyre_choice,
                         tyre_grip=self.tyre_multiplier, tyre_age=self.tyre_age)
 
     def crashed(self):

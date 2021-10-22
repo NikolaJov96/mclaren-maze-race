@@ -4,7 +4,7 @@ import sys
 
 from imports import *
 from drivers.youngdriver import YoungDriver
-from nikola.turn_tracker import TurnTracker
+from nikola.turn_tracker import RealtimeTurnTracker
 
 
 class TurnTrackerYoungDriver(YoungDriver):
@@ -12,7 +12,7 @@ class TurnTrackerYoungDriver(YoungDriver):
     def __init__(self, name, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
 
-        self.turn_tracker = TurnTracker()
+        self.turn_tracker = RealtimeTurnTracker()
         self.correct_turns = self.turn_tracker.correct_turns
         self.track_num = 0
 
@@ -58,19 +58,26 @@ if __name__ == '__main__':
     learning_rate = 0.25
 
     # Chanpionship parameters
-    num_repeats = 10
+    num_repeats = 200
 
     # Compare drivers with different min distances
     drivers = [
         YoungDriver('Original', speed_rounding=speed_rounding, max_distance=max_distance, learning_rate=learning_rate),
-        TurnTrackerYoungDriver('TurnTracker', speed_rounding=speed_rounding, max_distance=max_distance, learning_rate=learning_rate)
+        TurnTrackerYoungDriver('RealtimeTurnTracker', speed_rounding=speed_rounding, max_distance=max_distance, learning_rate=learning_rate)
     ]
 
     championship = Championship(drivers, Level.Young, shuffle_tracks=False, verbose=True)
     # Skip track 21, as young driver is not capable of finishing it on time
     track_indices = list(range(TrackStore.get_number_of_tracks(level=Level.Young)))
     track_indices.remove(21 - 1)
-    championship_results, race_results, race_times = championship.run_championship(num_repeats=num_repeats, track_indices=track_indices)
+    championship_results, race_results, race_times = \
+        championship.run_championship(num_repeats=num_repeats, track_indices=track_indices)
 
     plot_multiple_championship_results(championship_results)
     plt.savefig(os.path.join(path, 'original_vs_turn_tracker.png'))
+
+    print(championship_results)
+    print()
+    print(race_results)
+    print()
+    print(race_times)

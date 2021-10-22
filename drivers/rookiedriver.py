@@ -36,6 +36,9 @@ class RookieDriver(YoungDriver):
         else:
             action = self._choose_randomly(Action.get_sl_actions())
 
+        if track_state.distance_ahead == 0:
+            return action
+
         # If DRS is available then need to decide whether to open DRS or not.
         if track_state.drs_available and not car_state.drs_active:
             # Simulate the straight with and without DRS and check which we think will be faster

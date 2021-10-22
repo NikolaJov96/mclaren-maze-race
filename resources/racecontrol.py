@@ -72,7 +72,6 @@ def race(driver=None, car=None, track=None, track_index=None, level=Level.Learne
             break
 
     # Race is complete, update driver with post race data
-    print('race : calling update_after_race')
     driver.update_after_race(track.correct_turns)
 
     return driver, race_time, finished

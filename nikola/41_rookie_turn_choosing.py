@@ -116,7 +116,7 @@ if __name__ == '__main__':
 
     shuffle_tracks = True
     verbose = True
-    num_repeats = 10
+    num_repeats = 1000
 
     turn_trackers = [
         (DefaultTurnTracker, 'default'),

@@ -107,12 +107,12 @@ if __name__ == '__main__':
         os.mkdir(path)
 
     # Run one season with turn logger
-    # Season(Level.Rookie).race(
-    #     RookieDriverTurnChooser(
-    #         'RFTC_DD',
-    #         os.path.join(path, 'default_default'),
-    #         DefaultTurnTracker(),
-    #         DefaultTurnChooser()))
+    Season(Level.Rookie).race(
+        RookieDriverTurnChooser(
+            'RFTC_DD',
+            os.path.join(path, 'default_default'),
+            DefaultTurnTracker(),
+            DefaultTurnChooser()))
 
     shuffle_tracks = True
     verbose = True

@@ -32,17 +32,20 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
 
     def __init__(self):
         self.data = {
-            Action.FullThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
-            Action.LightThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
-            Action.HeavyBrake: [[RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH]],
-            Action.LightBrake: [RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH]
+            drs_active: {
+                Action.FullThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
+                Action.LightThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
+                Action.HeavyBrake: [[RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH]],
+                Action.LightBrake: [RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH]
+            } for drs_active in [False, True]
         }
+
         self.cornering_speed_bounds = [10, 300]
 
     def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState):
 
         if action in CarDynamicsTracker.ACCEL_ACTIONS:
-            current_data = self.data[action]
+            current_data = self.data[previous_car_state.drs_active][action]
             # Remove initial values
             if previous_car_state.speed < 5.0:
                 current_data.remove(RookieCarDynamicsTracker.INC_LOW)
@@ -56,7 +59,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             if distances[closest_id] < 1.0:
                 del current_data[closest_id]
             # Add the new record
-            self.data[action].append([[previous_car_state.speed, new_car_state.speed]])
+            current_data.append([[previous_car_state.speed, new_car_state.speed]])
 
         elif action in [Action.TurnLeft, Action.TurnRight]:
             if previous_car_state.heading == new_car_state.heading:
@@ -76,11 +79,12 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
     def max_cornering_speed(self):
         return sum(self.cornering_speed_bounds) / 2.0
 
-    def accel_action(self, current_speed, action: Action):
+    def accel_action(self, current_speed, action: Action, drs_active: bool):
         super().accel_action(current_speed, action)
-        assert len(self.data[action]) > 2
+        current_data = self.data[drs_active][action]
+        assert len(current_data) > 2
         interpolation = scipy.interpolate.interp1d(
-            self.data[:, 0], self.data[:, 1], fill_value='extrapolate', assume_sorted=False)
+            current_data[:, 0], current_data[:, 1], fill_value='extrapolate', assume_sorted=False)
         return interpolation(current_speed)
 
 
@@ -96,8 +100,8 @@ if __name__ == '__main__':
     driver1 = TestRookieDriver('D1')
     driver2 = deepcopy(driver1)
 
-    assert len(driver1.car_dynamics_tracker.data[Action.FullThrottle]) == 2
-    assert len(driver2.car_dynamics_tracker.data[Action.FullThrottle]) == 2
+    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
+    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
     assert driver1.car_dynamics_tracker.cornering_speed_bounds[0] == 10
     assert driver2.car_dynamics_tracker.cornering_speed_bounds[0] == 10
 
@@ -110,8 +114,8 @@ if __name__ == '__main__':
         previous_car_state=CarState(speed=110.0, heading=(1, 0)),
         new_car_state=CarState(speed=110.0, heading=Heading(1, 0).get_right_heading()))
 
-    assert len(driver1.car_dynamics_tracker.data[Action.FullThrottle]) == 3
-    assert len(driver2.car_dynamics_tracker.data[Action.FullThrottle]) == 2
+    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 3
+    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
     assert driver1.car_dynamics_tracker.cornering_speed_bounds[0] == 110
     assert driver2.car_dynamics_tracker.cornering_speed_bounds[0] == 10
 

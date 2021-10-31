@@ -67,7 +67,7 @@ if __name__ == '__main__':
     print('Running season')
     Season(Level.Rookie).race(
         RookieDriverSafetyCar(
-            'RFSC',
+            'RDSC',
             os.path.join(path, 'season'),
             SafetyCarTracker()))
 
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     print('Running championship')
     drivers = [
         RookieDriver('RD'),
-        RookieDriverSafetyCar('RFSC', '', SafetyCarTracker())
+        RookieDriverSafetyCar('RDSC', '', SafetyCarTracker())
     ]
     championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
     championship_results, _, _ = championship.run_championship(num_repeats=100)

@@ -25,18 +25,10 @@ class CarDynamicsTracker:
 
 class RookieCarDynamicsTracker(CarDynamicsTracker):
 
-    INC_LOW =  [-1.0, 0.0]
-    INC_HIGH = [600.0, 601.0]
-    DEC_LOW = [0.0, -1.0]
-    DEC_HIGH = [601.0, 600.0]
-
     def __init__(self):
         self.data = {
             drs_active: {
-                Action.FullThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
-                Action.LightThrottle: [RookieCarDynamicsTracker.INC_LOW, RookieCarDynamicsTracker.INC_HIGH],
-                Action.HeavyBrake: [RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH],
-                Action.LightBrake: [RookieCarDynamicsTracker.DEC_LOW, RookieCarDynamicsTracker.DEC_HIGH]
+                action: [] for action in CarDynamicsTracker.ACCEL_ACTIONS
             } for drs_active in [False, True]
         }
 
@@ -46,13 +38,15 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
 
         if action in CarDynamicsTracker.ACCEL_ACTIONS:
             current_data = self.data[previous_car_state.drs_active][action]
-            # Remove closest value if too close
-            distances = np.abs(np.array(current_data)[:, 0] - previous_car_state.speed)
-            closest_id = np.argmin(distances)
-            if distances[closest_id] < 1.0:
-                del current_data[closest_id]
-            # Add the new record
-            current_data.append([previous_car_state.speed, new_car_state.speed])
+            if len(current_data) > 0:
+                # Find the closest existing data point
+                distances = np.abs(np.array(current_data)[:, 0] - previous_car_state.speed)
+                closest_id = np.argmin(distances)
+                if distances[closest_id] > 1.0:
+                    # Add the new record if it is not too close
+                    current_data.append([previous_car_state.speed, new_car_state.speed])
+            else:
+                current_data.append([previous_car_state.speed, new_car_state.speed])
 
         elif action in [Action.TurnLeft, Action.TurnRight]:
             if previous_car_state.heading == new_car_state.heading:
@@ -75,7 +69,8 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
         super().estimate_next_speed(current_speed, action)
         current_data = np.array(self.data[drs_active][action])
-        assert len(current_data) >= 2
+        if len(current_data) < 2:
+            return current_speed
         interpolation = scipy.interpolate.interp1d(
             current_data[:, 0], current_data[:, 1], fill_value='extrapolate', assume_sorted=False)
         return interpolation(current_speed)

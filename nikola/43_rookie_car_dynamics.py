@@ -37,6 +37,10 @@ class RookieDriverCarDynamics(RookieDriver):
             self.race_logger.log_race_step(
                 previous_car_state, previous_track_state, action,
                 new_car_state, new_track_state, result)
+        if self.car_dynamics_tracker.data[False][Action.FullThrottle] != self.sl_data[Action.FullThrottle]:
+            print(self.car_dynamics_tracker.data[False][Action.FullThrottle])
+            print(self.sl_data[Action.FullThrottle])
+        assert self.car_dynamics_tracker.data[False][Action.FullThrottle] == self.sl_data[Action.FullThrottle]
         self.car_dynamics_tracker.add_data_point(action, previous_car_state, new_car_state)
         return super().update_with_action_results(
             previous_car_state, previous_track_state, action,
@@ -64,7 +68,7 @@ if __name__ == '__main__':
         RookieDriverCarDynamics('RDCD', '', RookieCarDynamicsTracker())
     ]
     championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
-    championship_results, _, _ = championship.run_championship(num_repeats=1000)
+    championship_results, _, _ = championship.run_championship(num_repeats=10)
     plot_multiple_championship_results(championship_results)
     plt.savefig(os.path.join(path, 'championship.png'))
     plt.close()

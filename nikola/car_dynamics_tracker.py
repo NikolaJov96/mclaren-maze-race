@@ -9,7 +9,7 @@ class CarDynamicsTracker:
         Action.FullThrottle, Action.LightThrottle, Action.HeavyBrake, Action.LightBrake
     ]
 
-    def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState):
+    def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState, result: ActionResult):
         raise NotImplementedError
 
     def max_cornering_speed(self):
@@ -35,7 +35,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         self.cornering_speed_bounds = [10, 300]
         self.top_speed_recorded = { drs: 1 for drs in [True, False] }
 
-    def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState):
+    def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState, result: ActionResult):
 
         if action in CarDynamicsTracker.ACCEL_ACTIONS:
             current_data = self.data[previous_car_state.drs_active][action]
@@ -50,7 +50,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
                 current_data.append([previous_car_state.speed, new_car_state.speed])
 
         elif action in [Action.TurnLeft, Action.TurnRight]:
-            if previous_car_state.heading == new_car_state.heading:
+            if result.spun:
                 # Spin
                 self.cornering_speed_bounds[1] = min(
                     self.cornering_speed_bounds[1],
@@ -73,7 +73,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             new_car_state.speed)
 
     def max_cornering_speed(self):
-        return sum(self.cornering_speed_bounds) / 2.0
+        return (self.cornering_speed_bounds[0] * 2 + self.cornering_speed_bounds[1]) / 3.0
 
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
         super().estimate_next_speed(current_speed, action)
@@ -97,22 +97,24 @@ if __name__ == '__main__':
     driver1 = TestRookieDriver('D1')
     driver2 = deepcopy(driver1)
 
-    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
-    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
+    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 0
+    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 0
     assert driver1.car_dynamics_tracker.cornering_speed_bounds[0] == 10
     assert driver2.car_dynamics_tracker.cornering_speed_bounds[0] == 10
 
     driver1.car_dynamics_tracker.add_data_point(
         action=Action.FullThrottle,
         previous_car_state=CarState(speed=100.0, heading=(1, 0)),
-        new_car_state=CarState(speed=110.0, heading=(1, 0)))
+        new_car_state=CarState(speed=110.0, heading=(1, 0)),
+        result=ActionResult(turned_ok=True, crashed=False, spun=False, finished=False))
     driver1.car_dynamics_tracker.add_data_point(
         action=Action.TurnRight,
         previous_car_state=CarState(speed=110.0, heading=(1, 0)),
-        new_car_state=CarState(speed=110.0, heading=Heading(1, 0).get_right_heading()))
+        new_car_state=CarState(speed=110.0, heading=Heading(1, 0).get_right_heading()),
+        result=ActionResult(turned_ok=True, crashed=False, spun=False, finished=False))
 
-    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 3
-    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 2
+    assert len(driver1.car_dynamics_tracker.data[False][Action.FullThrottle]) == 1
+    assert len(driver2.car_dynamics_tracker.data[False][Action.FullThrottle]) == 0
     assert driver1.car_dynamics_tracker.cornering_speed_bounds[0] == 110
     assert driver2.car_dynamics_tracker.cornering_speed_bounds[0] == 10
 

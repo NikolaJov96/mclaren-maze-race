@@ -33,6 +33,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         }
 
         self.cornering_speed_bounds = [10, 300]
+        self.top_speed_recorded = { drs: 1 for drs in [True, False] }
 
     def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState):
 
@@ -62,6 +63,14 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
 
         elif action == Action.Continue:
             assert previous_car_state.speed == new_car_state.speed
+
+        # Update max recorded speed
+        self.top_speed_recorded[previous_car_state.drs_active] = max(
+            self.top_speed_recorded[previous_car_state.drs_active],
+            previous_car_state.speed)
+        self.top_speed_recorded[new_car_state.drs_active] = max(
+            self.top_speed_recorded[new_car_state.drs_active],
+            new_car_state.speed)
 
     def max_cornering_speed(self):
         return sum(self.cornering_speed_bounds) / 2.0

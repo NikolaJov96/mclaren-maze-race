@@ -29,7 +29,6 @@ class RookieDriver(YoungDriver):
 
         # Get the target speed
         target_speed = self._get_target_speed(track_state.distance_ahead, track_state.safety_car_active)
-        print(target_speed)
 
         # Choose action that gets us closest to target, or choose randomly
         if driver_rng().rand() > self.random_action_probability:

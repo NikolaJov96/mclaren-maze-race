@@ -24,6 +24,7 @@ if __name__ == '__main__':
 
     dynamics = CarDynamicsModel1(300)
 
+    # Acceleration through time
     for drs_active in [False, True]:
 
         # Full throttle
@@ -53,3 +54,9 @@ if __name__ == '__main__':
         for i in range(1, duration):
             speed_time[i] = dynamics.light_brake(speed_time[i - 1])
         plot(speed_time, os.path.join(path, 'light_brake_drs_{}.png'.format(drs_active)))
+
+    # Braking to stop
+    for speed in range(100):
+        light_brake_speed = dynamics.light_brake(speed)
+        heavy_brake_speed = dynamics.heavy_brake(speed)
+        print('{:3.2f} {:3.2f} {:3.2f}'.format(speed, light_brake_speed, heavy_brake_speed))

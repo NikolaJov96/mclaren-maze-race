@@ -73,7 +73,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             new_car_state.speed)
 
     def max_cornering_speed(self):
-        return (self.cornering_speed_bounds[0] * 2 + self.cornering_speed_bounds[1]) / 3.0
+        return sum(self.cornering_speed_bounds) / 2.0
 
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
         super().estimate_next_speed(current_speed, action)
@@ -82,7 +82,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             return current_speed
         interpolation = scipy.interpolate.interp1d(
             current_data[:, 0], current_data[:, 1], fill_value='extrapolate', assume_sorted=False)
-        return interpolation(current_speed)
+        return interpolation(current_speed).clip(min=0)
 
 
 if __name__ == '__main__':

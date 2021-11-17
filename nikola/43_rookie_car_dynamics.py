@@ -37,7 +37,6 @@ class RookieDriverCarDynamics(RookieDriver):
         if distance_ahead == 0:
             return 0
         if self.use_target_speeds:
-            a = super()._get_target_speed(distance_ahead, safety_car_active, target_speeds=target_speeds)
             target_speed = StraightSimulator.get_target_speeds(self.car_dynamics_tracker, distance_ahead, self.potential_stop)[-1]
             if safety_car_active:
                 target_speed = min(target_speed, self.safety_car_speed)

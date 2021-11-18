@@ -1,4 +1,3 @@
-import os
 from multiprocessing import Process, Queue
 import os
 import sys

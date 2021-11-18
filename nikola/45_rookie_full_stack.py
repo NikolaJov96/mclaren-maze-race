@@ -3,7 +3,7 @@ import sys
 
 from imports import *
 from drivers.driver import Driver
-from nikola.car_dynamics_tracker import CarDynamicsTracker, RookieCarDynamicsTracker
+from nikola.car_dynamics_tracker import RookieCarDynamicsTracker
 from nikola.race_logger import RaceLogger
 from nikola.safety_car_tracker import SafetyCarTracker
 from nikola.straight_simulator import StraightSimulator

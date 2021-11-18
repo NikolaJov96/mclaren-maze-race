@@ -22,6 +22,12 @@ class CarDynamicsTracker:
     def can_turn(self, current_speed):
         return current_speed < self.max_cornering_speed()
 
+    def choose_best_action(self, speed: float, target_speed: float, drs_active: bool):
+        raise NotImplementedError
+
+    def get_fardest_action(self, speed: float, drs_active: bool):
+        raise NotImplementedError
+
 
 class RookieCarDynamicsTracker(CarDynamicsTracker):
 
@@ -96,6 +102,18 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             errors[errors > 0] = np.inf
         best_action_id = np.argmin(errors ** 2)
         return actions[best_action_id]
+
+    def get_fardest_action(self, speed: float, drs_active: bool, actions: List[Action] = CarDynamicsTracker.ACCEL_ACTIONS):
+        current_data = self.data[drs_active]
+        for action in actions:
+            if len(current_data[action]) == 0:
+                return action, 1e+5
+        distances = {
+            action: min([abs(speed - data_point[0]) for data_point in current_data[action]])
+            for action in actions
+        }
+        fardest_action = max(distances, key=distances.get)
+        return fardest_action, distances[fardest_action]
 
 
 if __name__ == '__main__':

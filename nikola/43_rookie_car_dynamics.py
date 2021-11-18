@@ -107,18 +107,18 @@ if __name__ == '__main__':
     plt.savefig(os.path.join(path, 'championship_target_speeds.png'))
     plt.close()
 
-    won_races = finishing_positions['RD'] < finishing_positions['RDCD']
+    won_races = finishing_positions['RDCD'] < finishing_positions['RD']
     print('won_races')
     print(won_races)
-    won_time_diff = all_race_times['RDCD'][won_races] - all_race_times['RD'][won_races]
+    won_time_diff = all_race_times['RD'][won_races] - all_race_times['RDCD'][won_races]
     print('won_time_diff')
     print(won_time_diff)
     print(sum(won_time_diff) / len(won_time_diff))
 
-    lost_races = finishing_positions['RD'] > finishing_positions['RDCD']
+    lost_races = finishing_positions['RDCD'] > finishing_positions['RD']
     print('lost_races')
     print(lost_races)
-    lost_time_diff = all_race_times['RD'][lost_races] - all_race_times['RDCD'][lost_races]
+    lost_time_diff = all_race_times['RDCD'][lost_races] - all_race_times['RD'][lost_races]
     print('lost_time_diff')
     print(lost_time_diff)
     print(sum(lost_time_diff) / len(lost_time_diff))

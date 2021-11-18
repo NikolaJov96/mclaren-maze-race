@@ -76,6 +76,8 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         return sum(self.cornering_speed_bounds) / 2.0
 
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
+        if action == Action.Continue:
+            return current_speed
         super().estimate_next_speed(current_speed, action)
         current_data = np.array(self.data[drs_active][action])
         if len(current_data) < 2:
@@ -83,6 +85,17 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         interpolation = scipy.interpolate.interp1d(
             current_data[:, 0], current_data[:, 1], fill_value='extrapolate', assume_sorted=False)
         return interpolation(current_speed).clip(min=0)
+
+    def choose_best_action(self, speed: float, target_speed: float, drs_active: bool):
+        actions = Action.get_sl_actions()
+        if 0 == speed:
+            actions = [Action.LightThrottle, Action.FullThrottle]
+        next_speeds = np.array([self.estimate_next_speed(speed, action, drs_active) for action in actions])
+        errors = next_speeds - target_speed
+        if np.any(errors <= 0):
+            errors[errors > 0] = np.inf
+        best_action_id = np.argmin(errors ** 2)
+        return actions[best_action_id]
 
 
 if __name__ == '__main__':

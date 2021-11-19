@@ -79,7 +79,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             new_car_state.speed)
 
     def max_cornering_speed(self):
-        return sum(self.cornering_speed_bounds) / 2.0
+        return (self.cornering_speed_bounds[0] * 4.0 + self.cornering_speed_bounds[1]) / 5.0
 
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
         if action == Action.Continue:

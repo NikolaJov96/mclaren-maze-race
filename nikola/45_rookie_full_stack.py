@@ -67,11 +67,11 @@ class MyRookieDriver(Driver):
         action = self.car_dynamics_tracker.choose_best_action(car_state.speed, target_speed, car_state.drs_active)
         # Consider reasons to explore instead of to exploit
         # Lower the speed, experiment closer to the turn, rough heuristic
-        if car_state.speed / 350.0 * 5.0 / track_state.distance_ahead < 1.0:
+        if not track_state.safety_car_active and car_state.speed / 350.0 * 5.0 / track_state.distance_ahead < 1.0:
             # Find the action with the fardest data point and pick that one
             fardest_action, fardest_action_distance = \
                 self.car_dynamics_tracker.get_fardest_action(car_state.speed, car_state.drs_active)
-            if fardest_action_distance > 20:
+            if fardest_action_distance > 30:
                 # Prevent from breaking the DRS too early
                 if not (car_state.drs_active and fardest_action in [Action.LightBrake, Action.HeavyBrake] and track_state.distance_ahead > 7):
                     action = fardest_action

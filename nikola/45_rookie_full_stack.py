@@ -73,6 +73,9 @@ class MyRookieDriver(Driver):
         self.potential_stop = False
 
     def make_a_move(self, car_state: CarState, track_state: TrackState) -> Action:
+        # Immediately update the safety car tracker and get the safety car speed if active
+        safety_car_target_speed = self.safety_car_tracker.new_track_state(track_state)
+
         # Easy choice if distance_ahead is 0
         if track_state.distance_ahead == 0:
             if track_state.distance_left == 0 and track_state.distance_right == 0 and car_state.speed > 0:
@@ -96,8 +99,6 @@ class MyRookieDriver(Driver):
             self.potential_stop)
         target_speed = target_speeds[-1]
 
-        # Get the safety car speed if active
-        safety_car_target_speed = self.safety_car_tracker.new_track_state(track_state)
         # If safety car is active, make sure the target speed is under its
         if track_state.safety_car_active:
             target_speed = min(target_speed, safety_car_target_speed)

@@ -11,6 +11,38 @@ from nikola.turn_chooser import MultipleClosestTurnChooser
 from nikola.turn_tracker import RealtimeTurnTracker
 
 
+class RookieDriverLooged(RookieDriver):
+    """
+    Taken from 41_rookie_turn_choosing.py
+    """
+
+    def __init__(self, name, race_logger_dir, random_action_probability=0.5, random_action_decay=0.99,
+            min_random_action_probability=0, *args, **kwargs):
+        super().__init__(name, random_action_probability=random_action_probability,
+            random_action_decay=random_action_decay,
+            min_random_action_probability=min_random_action_probability, *args, **kwargs)
+
+        self.race_logger_dir = race_logger_dir
+        self.race_id = 0
+        self.race_logger = None
+
+    def prepare_for_race(self):
+        self.race_id += 1
+        if self.race_logger_dir != '':
+            self.race_logger = RaceLogger(os.path.join(self.race_logger_dir, '{}.png'.format(self.race_id)))
+        return super().prepare_for_race()
+
+    def update_with_action_results(self, previous_car_state: CarState, previous_track_state: TrackState,
+            action: Action, new_car_state: CarState, new_track_state: TrackState, result: ActionResult):
+        if self.race_logger is not None:
+            self.race_logger.log_race_step(
+                previous_car_state, previous_track_state, action,
+                new_car_state, new_track_state, result)
+        return super().update_with_action_results(
+            previous_car_state, previous_track_state, action,
+            new_car_state, new_track_state, result)
+
+
 class MyRookieDriver(Driver):
 
     def __init__(self, name: str, race_logger_dir: str):
@@ -48,7 +80,14 @@ class MyRookieDriver(Driver):
                 return self.car_dynamics_tracker.choose_best_action(car_state.speed, 0, car_state.drs_active)
             else:
                 # Have to turn (in case of a spin we will be back in this state with the speed=0)
-                return Action.TurnLeft if track_state.distance_left > 0 else Action.TurnRight
+                if track_state.distance_left > 0 and track_state.distance_right > 0:
+                    return self.turn_chooser.t_junction_choose_turn(
+                        self.race_id,
+                        track_state.position,
+                        self.turn_tracker.correct_turns,
+                        [track_state.distance_left, track_state.distance_right])
+                else:
+                    return Action.TurnLeft if track_state.distance_left > 0 else Action.TurnRight
 
         # Get the max safe target speed
         target_speeds = StraightSimulator.get_target_speeds(
@@ -78,6 +117,11 @@ class MyRookieDriver(Driver):
                 else:
                     action, _ = self.car_dynamics_tracker.get_fardest_action(
                         car_state.speed, car_state.drs_active, [Action.LightThrottle, Action.FullThrottle])
+        elif track_state.safety_car_active and car_state.speed > safety_car_target_speed:
+            # If safety car is active and speed is exceeded make sure we brake
+            if action not in [Action.HeavyBrake, Action.LightBrake]:
+                action = action, _ = self.car_dynamics_tracker.get_fardest_action(
+                    car_state.speed, car_state.drs_active, [Action.HeavyBrake, Action.LightBrake])
 
         # Determine should we start DRS
         if track_state.drs_available and not car_state.drs_active:
@@ -139,9 +183,45 @@ def main():
     if not os.path.exists(path):
         os.mkdir(path)
 
-    # Run one season with turn logger
-    print('Running season')
-    Season(Level.Rookie).race(MyRookieDriver('MyRookieDriver', os.path.join(path, 'season')))
+    # Run the championship with the original rookie
+    print('Running championship with no target speeds')
+    drivers = [
+        RookieDriverLooged('RD', os.path.join(path, 'original_rookie')),
+        MyRookieDriver('MyRookieDriver', os.path.join(path, 'my_rookie'))
+    ]
+    championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
+    championship_results, finishing_positions, all_race_times = championship.run_championship(num_repeats=1)
+    plot_multiple_championship_results(championship_results)
+    plt.savefig(os.path.join(path, 'championship.png'))
+    plt.close()
+
+    with open(os.path.join(path, 'championship.txt'), 'w') as out_file:
+        out_file.write('all_race_times\n')
+        out_file.write(str(all_race_times))
+        out_file.write('\n')
+
+        won_races = finishing_positions['MyRookieDriver'] < finishing_positions['RD']
+        out_file.write('won_races\n')
+        out_file.write(str(won_races))
+        out_file.write('\n')
+        won_time_diff = all_race_times['RD'][won_races] - all_race_times['MyRookieDriver'][won_races]
+        out_file.write('won_time_diff\n')
+        out_file.write(str(won_time_diff))
+        out_file.write('\n')
+        out_file.write(str(sum(won_time_diff) / len(won_time_diff)))
+        out_file.write('\n')
+
+        lost_races = finishing_positions['MyRookieDriver'] > finishing_positions['RD']
+        if sum([sum(lost_sub_races) for lost_sub_races in lost_races]) > 0:
+            out_file.write('lost_races\n')
+            out_file.write(str(lost_races))
+            out_file.write('\n')
+            lost_time_diff = all_race_times['MyRookieDriver'][lost_races] - all_race_times['RD'][lost_races]
+            out_file.write('lost_time_diff\n')
+            out_file.write(str(lost_time_diff))
+            out_file.write('\n')
+            out_file.write(str(sum(lost_time_diff) / len(lost_time_diff)))
+            out_file.write('\n')
 
 
 if __name__ == '__main__':

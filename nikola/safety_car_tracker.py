@@ -32,7 +32,7 @@ class SafetyCarTracker:
                     # Safety car iteration not seen before
                     self.bounds.append([SafetyCarTracker.MIN_SPEED, SafetyCarTracker.MAX_SPEED])
 
-            if self.instance_penalties < 3 and self.race_penalties < 6:
+            if self.instance_penalties < 1 and self.race_penalties < 6:
                 return sum(self.bounds[self.safety_car_id]) / 2.0
             else:
                 return self.bounds[self.safety_car_id][0]

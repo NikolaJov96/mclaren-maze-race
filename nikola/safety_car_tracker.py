@@ -32,7 +32,6 @@ class SafetyCarTracker:
                 # Safety car just activated
                 self.safety_car_id += 1
                 self.instance_penalties = 0
-                # print('!', self.safety_car_id)
                 self.was_safety_car_previous_turn = True
 
                 if self.safety_car_id >= len(self.bounds):

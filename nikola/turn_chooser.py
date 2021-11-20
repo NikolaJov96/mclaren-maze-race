@@ -110,6 +110,9 @@ class MultipleClosestTurnChooser(TurnChooser):
         # If one is exact, use it
         if distances[closest_ids[0]] == 0:
             return self.check(correct_actions[closest_ids[0]])
+        # If the closest one is too far, pick the shorter straight
+        if distances[closest_ids[0]] > 10.0:
+            return Action.TurnLeft if left_right_distance[0] < left_right_distance[1] else Action.TurnRight
 
         # Else use the weighted sum
         left_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnLeft]

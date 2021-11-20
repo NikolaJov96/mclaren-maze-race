@@ -102,13 +102,16 @@ class MultipleClosestTurnChooser(TurnChooser):
             else:
                 return self.check(driver_rng().choice([Action.TurnLeft, Action.TurnRight]))
 
+        # Find multiple closest data-points
         distances = np.array([position.distance_to(turn_position) for turn_position in correct_turns])
         closest_ids = np.argsort(distances)[:min(self.num_closest, len(distances))]
         correct_actions = list(correct_turns.values())
 
+        # If one is exact, use it
         if distances[closest_ids[0]] == 0:
             return self.check(correct_actions[closest_ids[0]])
 
+        # Else use the weighted sum
         left_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnLeft]
         right_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnRight]
         left_weight = sum(map(lambda d: 1.0 / d, distances[left_ids]))

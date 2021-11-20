@@ -185,8 +185,8 @@ def main():
     if not os.path.exists(path):
         os.mkdir(path)
 
-    # Run the championship with the original rookie
-    print('Running championship with no target speeds')
+    # Run one championship with the original rookie
+    print('Running championship')
     drivers = [
         RookieDriverLooged('RD', os.path.join(path, 'original_rookie')),
         MyRookieDriver('MyRookieDriver', os.path.join(path, 'my_rookie')),
@@ -224,6 +224,19 @@ def main():
                 out_file.write('\n')
 
             out_file.write('\n')
+
+    # Run repeated championships with the original rookie
+    print('Running championships')
+    drivers = [
+        RookieDriverLooged('RD', ''),
+        MyRookieDriver('MyRookieDriver', ''),
+        Submission('')
+    ]
+    championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
+    championship_results, finishing_positions, all_race_times = championship.run_championship(num_repeats=100)
+    plot_multiple_championship_results(championship_results)
+    plt.savefig(os.path.join(path, 'repeated_championship.png'))
+    plt.close()
 
 
 if __name__ == '__main__':

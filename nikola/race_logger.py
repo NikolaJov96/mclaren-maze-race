@@ -1,5 +1,4 @@
 import os
-from typing_extensions import runtime
 
 from imports import *
 
@@ -9,15 +8,19 @@ class RaceLogger:
     def __init__(self, save_file):
         self.save_file = save_file
 
+        # Ids of important track properties during the race
         self.end_of_straight_ids = []
         self.drs_available_ids = []
         self.safety_car_active_ids = []
 
+        # Important car properties during the race
         self.speed = []
         self.drs_active_ids = []
 
+        # Taken actions
         self.actions = []
 
+        # Action results
         self.turned_ok_ids = []
         self.crashed_ids = []
         self.spun_ids = []

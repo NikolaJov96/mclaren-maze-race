@@ -22,6 +22,8 @@ class SafetyCarTracker:
         self.temp_bounds = None
         # Tracks continuous safety car event
         self.was_safety_car_previous_turn = False
+        # Force braking next turn
+        self.force_braking = False
 
     def new_race(self):
         self.safety_car_id = -1
@@ -29,6 +31,7 @@ class SafetyCarTracker:
         self.instance_penalties = 0
         self.temp_bounds = None
         self.was_safety_car_previous_turn = False
+        self.force_braking = False
 
     def new_track_state(self, track_state: TrackState):
         if track_state.safety_car_active:
@@ -51,7 +54,10 @@ class SafetyCarTracker:
                 self.temp_bounds = self.bounds[self.safety_car_id].copy()
 
             # If under the penalty threshold experiment, else play safe
-            if self.instance_penalties < 1 and self.race_penalties < 6:
+            if self.force_braking:
+                self.force_braking = False
+                return 0
+            elif self.instance_penalties < 1 and self.race_penalties < 6:
                 return sum(self.temp_bounds) / 2.0
             else:
                 return self.temp_bounds[0]
@@ -59,6 +65,7 @@ class SafetyCarTracker:
         else:
             # Event ending
             self.was_safety_car_previous_turn = False
+            self.force_braking = False
             return 1e+5
 
     def action_result(self, new_car_state: CarState, result: ActionResult):
@@ -78,6 +85,7 @@ class SafetyCarTracker:
                 # Discard faulty temp bounds and roll to the next safety car id
                 self.temp_bounds = None
                 self.was_safety_car_previous_turn = False
+                self.force_braking = True
 
         # Make sure what we learned from the last event is stored
         if result.finished and self.temp_bounds is not None and self.safety_car_id >= 0:

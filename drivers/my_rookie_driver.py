@@ -3,8 +3,6 @@ import scipy
 from drivers.driver import Driver
 from imports import *
 
-from nikola.race_logger import RaceLogger
-
 
 class RealtimeTurnTracker:
     """
@@ -437,11 +435,9 @@ class StraightSimulator:
 
 class MyDriver(Driver):
 
-    def __init__(self, race_logger_dir: str):
-        super().__init__('McLando')
-        self.race_logger_dir = race_logger_dir
+    def __init__(self, name=None):
+        super().__init__('McLando' if name is None else name)
 
-        self.race_logger = None
         self.turn_tracker = RealtimeTurnTracker()
         self.turn_chooser = TurnChooser(3)
         self.safety_car_tracker = SafetyCarTracker()
@@ -454,9 +450,6 @@ class MyDriver(Driver):
     def prepare_for_race(self):
         # Next race id
         self.race_id += 1
-        # Initialize this race logger
-        if self.race_logger_dir != '':
-            self.race_logger = RaceLogger(os.path.join(self.race_logger_dir, '{}.png'.format(self.race_id)))
         # Start new race in the turn tracker
         self.turn_tracker.new_race()
         # Start new race in the safety car tracker
@@ -545,11 +538,6 @@ class MyDriver(Driver):
     def update_with_action_results(self,
             previous_car_state: CarState, previous_track_state: TrackState, action: Action,
             new_car_state: CarState, new_track_state: TrackState, result: ActionResult):
-        # Log using the race logger
-        if self.race_logger is not None:
-            self.race_logger.log_race_step(
-                previous_car_state, previous_track_state, action,
-                new_car_state, new_track_state, result)
         # Update the turn tracker
         self.turn_tracker.new_track_state(previous_track_state, is_final=False)
         if result.finished:

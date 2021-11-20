@@ -190,7 +190,7 @@ def main():
     drivers = [
         RookieDriverLooged('RD', os.path.join(path, 'original_rookie')),
         MyRookieDriver('MyRookieDriver', os.path.join(path, 'my_rookie')),
-        Submission(os.path.join(path, 'my_rookie_submission'))
+        Submission()
     ]
     championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
     championship_results, finishing_positions, all_race_times = championship.run_championship(num_repeats=1)
@@ -230,7 +230,7 @@ def main():
     drivers = [
         RookieDriverLooged('RD', ''),
         MyRookieDriver('MyRookieDriver', ''),
-        Submission('')
+        Submission()
     ]
     championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
     championship_results, finishing_positions, all_race_times = championship.run_championship(num_repeats=100)

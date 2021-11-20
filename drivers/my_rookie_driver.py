@@ -8,8 +8,7 @@ from nikola.race_logger import RaceLogger
 
 class RealtimeTurnTracker:
     """
-    Class used to track correct turns in real time,
-    without waiting for the end of the race
+    Tracks correct turns in real time, without waiting for the end of the race
     """
 
     class RealtimeTrackerState:
@@ -105,17 +104,12 @@ class RealtimeTurnTracker:
         self._this_race_correct_turns = {}
 
     def new_race(self):
-        """
-        Reset race-specific turn tracker parameters
-        """
+        # Reinitialize current race parameters
         self._current_state = RealtimeTurnTracker.DefaultRealtimeTrackerState(self)
         self._recent_car_positions = []
         self._this_race_correct_turns = {}
 
     def new_track_state(self, track_state, is_final=False):
-        """
-        Handle a new track state
-        """
         # Skip in case of the same position as was the last
         if len(self._recent_car_positions) > 0 and self._recent_car_positions[-1] == track_state.position:
             return

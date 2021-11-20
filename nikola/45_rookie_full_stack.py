@@ -3,6 +3,7 @@ import sys
 
 from imports import *
 from drivers.driver import Driver
+from drivers.my_rookie_driver import MyDriver as Submission
 from nikola.car_dynamics_tracker import RookieCarDynamicsTracker
 from nikola.race_logger import RaceLogger
 from nikola.safety_car_tracker import SafetyCarTracker
@@ -188,7 +189,8 @@ def main():
     print('Running championship with no target speeds')
     drivers = [
         RookieDriverLooged('RD', os.path.join(path, 'original_rookie')),
-        MyRookieDriver('MyRookieDriver', os.path.join(path, 'my_rookie'))
+        MyRookieDriver('MyRookieDriver', os.path.join(path, 'my_rookie')),
+        Submission(os.path.join(path, 'my_rookie_submission'))
     ]
     championship = Championship(drivers, Level.Rookie, shuffle_tracks=True, verbose=True)
     championship_results, finishing_positions, all_race_times = championship.run_championship(num_repeats=1)
@@ -199,6 +201,10 @@ def main():
     with open(os.path.join(path, 'championship.txt'), 'w') as out_file:
         out_file.write('all_race_times\n')
         out_file.write(str(all_race_times))
+        out_file.write('\n')
+        out_file.write(str(all_race_times['McLando'] - all_race_times['RD']))
+        out_file.write('\n')
+        out_file.write(str(all_race_times['McLando'] - all_race_times['MyRookieDriver']))
         out_file.write('\n')
 
         won_races = finishing_positions['MyRookieDriver'] < finishing_positions['RD']

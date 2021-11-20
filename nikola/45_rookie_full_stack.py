@@ -202,32 +202,27 @@ def main():
         out_file.write('all_race_times\n')
         out_file.write(str(all_race_times))
         out_file.write('\n')
-        out_file.write(str(all_race_times['McLando'] - all_race_times['RD']))
-        out_file.write('\n')
-        out_file.write(str(all_race_times['McLando'] - all_race_times['MyRookieDriver']))
-        out_file.write('\n')
 
-        won_races = finishing_positions['MyRookieDriver'] < finishing_positions['RD']
-        out_file.write('won_races\n')
-        out_file.write(str(won_races))
-        out_file.write('\n')
-        won_time_diff = all_race_times['RD'][won_races] - all_race_times['MyRookieDriver'][won_races]
-        out_file.write('won_time_diff\n')
-        out_file.write(str(won_time_diff))
-        out_file.write('\n')
-        out_file.write(str(sum(won_time_diff) / len(won_time_diff)))
-        out_file.write('\n')
+        for driver in all_race_times:
+            out_file.write(driver)
+            out_file.write('\n')
+            won_races = finishing_positions[driver] == 1
+            if sum([sum(won_sub_races) for won_sub_races in won_races]) == 0:
+                continue
 
-        lost_races = finishing_positions['MyRookieDriver'] > finishing_positions['RD']
-        if sum([sum(lost_sub_races) for lost_sub_races in lost_races]) > 0:
-            out_file.write('lost_races\n')
-            out_file.write(str(lost_races))
+            out_file.write('won_races\n')
+            out_file.write(str(won_races))
             out_file.write('\n')
-            lost_time_diff = all_race_times['MyRookieDriver'][lost_races] - all_race_times['RD'][lost_races]
-            out_file.write('lost_time_diff\n')
-            out_file.write(str(lost_time_diff))
-            out_file.write('\n')
-            out_file.write(str(sum(lost_time_diff) / len(lost_time_diff)))
+            for other_driver in all_race_times:
+                if other_driver == driver:
+                    continue
+                won_time_diff = all_race_times[other_driver][won_races] - all_race_times[driver][won_races]
+                out_file.write('won_time_diff\n')
+                out_file.write(str(won_time_diff))
+                out_file.write('\n')
+                out_file.write(str(sum(won_time_diff) / len(won_time_diff)))
+                out_file.write('\n')
+
             out_file.write('\n')
 
 

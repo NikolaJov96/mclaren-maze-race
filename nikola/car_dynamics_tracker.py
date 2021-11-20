@@ -30,8 +30,12 @@ class CarDynamicsTracker:
 
 
 class RookieCarDynamicsTracker(CarDynamicsTracker):
+    """
+    Tracks the car dynamics for querying and simulation
+    """
 
     def __init__(self):
+        # Collected data for each acceleration action
         self.data = {
             drs_active: {
                 action: [] for action in CarDynamicsTracker.ACCEL_ACTIONS
@@ -44,6 +48,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
     def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState, result: ActionResult):
 
         if action in CarDynamicsTracker.ACCEL_ACTIONS:
+            # Handle acceleration actions
             current_data = self.data[previous_car_state.drs_active][action]
             if len(current_data) > 0:
                 # Find the closest existing data point
@@ -56,6 +61,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
                 current_data.append([previous_car_state.speed, new_car_state.speed])
 
         elif action in [Action.TurnLeft, Action.TurnRight]:
+            # Handle turning actions
             if result.spun:
                 # Spin
                 self.cornering_speed_bounds[1] = min(
@@ -68,6 +74,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
                     previous_car_state.speed)
 
         elif action == Action.Continue:
+            # Sanity check
             assert previous_car_state.speed == new_car_state.speed
 
         # Update max recorded speed
@@ -79,6 +86,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
             new_car_state.speed)
 
     def max_cornering_speed(self):
+        # Weighted average between known bounds
         return (self.cornering_speed_bounds[0] * 4.0 + self.cornering_speed_bounds[1]) / 5.0
 
     def estimate_next_speed(self, current_speed, action: Action, drs_active: bool):
@@ -88,11 +96,13 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         current_data = np.array(self.data[drs_active][action])
         if len(current_data) < 2:
             return current_speed
+        # Execute interpolation
         interpolation = scipy.interpolate.interp1d(
             current_data[:, 0], current_data[:, 1], fill_value='extrapolate', assume_sorted=False)
         return interpolation(current_speed).clip(min=0)
 
     def choose_best_action(self, speed: float, target_speed: float, drs_active: bool):
+        # Choose a best action to get just under the target speed
         actions = Action.get_sl_actions()
         if 0 == speed:
             actions = [Action.LightThrottle, Action.FullThrottle]
@@ -104,6 +114,7 @@ class RookieCarDynamicsTracker(CarDynamicsTracker):
         return actions[best_action_id]
 
     def get_fardest_action(self, speed: float, drs_active: bool, actions: List[Action] = CarDynamicsTracker.ACCEL_ACTIONS):
+        # Find the action whose closest data points are the fardest among acceleration actions
         current_data = self.data[drs_active]
         for action in actions:
             if len(current_data[action]) == 0:

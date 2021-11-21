@@ -540,7 +540,8 @@ class MyDriver(Driver):
                     safety_car_speed=safety_car_target_speed if track_state.safety_car_active else 0)
                 time_drs = (1 / (car_state.speed + 1)) + time_drs
                 # Make the decision
-                if self.drs_count < 6 or (time_drs < time_no_drs and not targets_broken_drs):
+                if self.drs_count < 6 or (time_drs < time_no_drs and not targets_broken_drs) or \
+                        action == Action.Continue:
                     self.drs_count += 1
                     action = Action.OpenDRS
 

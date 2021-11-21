@@ -290,7 +290,12 @@ class RookieCarDynamicsTracker:
         self.cornering_speed_bounds = [10, 300]
         self.top_speed_recorded = { drs: 1 for drs in [True, False] }
 
-    def add_data_point(self, action: Action, previous_car_state: CarState, new_car_state: CarState, result: ActionResult):
+    def add_data_point(
+            self,
+            action: Action,
+            previous_car_state: CarState,
+            new_car_state: CarState,
+            result: ActionResult):
 
         if action in RookieCarDynamicsTracker.ACCEL_ACTIONS:
             # Handle acceleration actions
@@ -502,7 +507,8 @@ class MyDriver(Driver):
                 self.car_dynamics_tracker.get_fardest_action(car_state.speed, car_state.drs_active)
             if fardest_action_distance > 30:
                 # Prevent from breaking the DRS too early
-                if not (car_state.drs_active and fardest_action in [Action.LightBrake, Action.HeavyBrake] and track_state.distance_ahead > 7):
+                if not (car_state.drs_active and fardest_action in [Action.LightBrake, Action.HeavyBrake] \
+                        and track_state.distance_ahead > 7):
                     action = fardest_action
                 else:
                     action, _ = self.car_dynamics_tracker.get_fardest_action(

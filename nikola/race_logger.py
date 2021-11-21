@@ -104,7 +104,7 @@ class RaceLogger:
         y_tick_labels = [
             '',
             'turn / spin / crash',
-            'throttle / brake',
+            'throttle / brake / tyre',
             'drs available',
             'safety car active',
             ''
@@ -123,6 +123,8 @@ class RaceLogger:
         plot_scatter(light_brake_ids, y=2, c=(0.5, 0.5, 1.0))
         heavy_brake_ids = get_action_ids(self.actions, Action.HeavyBrake)
         plot_scatter(heavy_brake_ids, y=2, c=(0.0, 0.0, 1.0))
+        tyre_change_ids = get_action_ids(self.actions, Action.ChangeTyres)
+        plot_scatter(tyre_change_ids, y=2, c=(1.0, 0.7, 0.0))
         # DRS
         plot_scatter(self.drs_available_ids, y=3, c=(0.8, 0.8, 0.3))
         plot_scatter(self.drs_active_ids, y=3, c=(1.0, 1.0, 0.0))

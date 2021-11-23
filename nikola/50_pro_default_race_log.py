@@ -4,11 +4,13 @@ import os
 import sys
 
 from imports import *
-from drivers.rookiedriver import RookieDriver
+from drivers.driver import Driver
+from drivers.prodriver import ProDriver
+from drivers.prodriver_analyzed import ProDriver as ProDriver2
 from nikola.race_logger import RaceLogger
 
 
-class ProDriverLooged(ProDriver):
+class ProDriverLooged(ProDriver2):
 
     def __init__(self, name, race_logger_dir, *args, **kwargs):
         super().__init__(name, *args, **kwargs)
@@ -33,6 +35,12 @@ class ProDriverLooged(ProDriver):
         return super().update_with_action_results(
             previous_car_state, previous_track_state, action,
             new_car_state, new_track_state, result, previous_weather_state)
+
+
+class MyProDriver(Driver):
+
+    def __init__(self, name):
+        super().__init__(name)
 
 
 if __name__ == '__main__':

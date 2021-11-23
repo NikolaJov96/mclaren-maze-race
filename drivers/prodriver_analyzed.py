@@ -124,7 +124,7 @@ class WeatherTracker:
 
 
 class ProDriver(RookieDriver):
-    def __init__(self, name, weather_on=True, random_action_probability=0.5, random_action_decay=0.96,
+    def __init__(self, name, random_action_probability=0.5, random_action_decay=0.96,
                  min_random_action_probability=0.0, *args, **kwargs):
 
         super().__init__(name, random_action_probability=random_action_probability,
@@ -144,7 +144,6 @@ class ProDriver(RookieDriver):
         self.target_speed_grips = None
 
         # Weather
-        self.weather_on = weather_on
         self.weather_data = []
         self.track_grips = []
         self.last_raining_move = -1000
@@ -416,7 +415,7 @@ class ProDriver(RookieDriver):
             grip = np.maximum(np.concatenate([[tyre_grip], future_grips]), 0.1)
 
         # Track grip from rain
-        if not exclude_track and self.weather_on:
+        if not exclude_track:
             if weather_state is None:
                 weather_state = self.current_weather_state      # used cached value
             track_grip = self.forecast_track_grip(weather_state, turns_ahead)
@@ -488,9 +487,6 @@ class ProDriver(RookieDriver):
         return track_grips, weather_data
 
     def fit_track_grip(self):
-        if not self.weather_on:
-            return
-
         n = [np.sum(~np.isnan(grip)) for grip in self.track_grips]
         if len(n) == 0 or np.max(n) == 0 or n[-1] == 0:
             self.num_previous_steps = 0
@@ -541,7 +537,7 @@ class ProDriver(RookieDriver):
         # Returns an array of length 1 + num_future_steps
         if self.track_grip_model_y is None:
             self.fit_track_grip()
-        if self.track_grip_model_y is None or current_weather_state is None or not self.weather_on:
+        if self.track_grip_model_y is None or current_weather_state is None:
             return np.ones(num_future_steps + 1)
 
         historic_y, historic_x = self.interpolate_nans(np.array(self.track_grips[-1]), np.array(self.weather_data[-1]))

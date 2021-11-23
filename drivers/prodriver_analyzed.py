@@ -1,8 +1,6 @@
 from scipy.interpolate import interp1d, PchipInterpolator
 from scipy.optimize import minimize
-import scipy.linalg
 from sklearn.linear_model import LinearRegression
-import warnings
 
 from drivers.driver import *
 from drivers.rookiedriver import RookieDriver
@@ -117,6 +115,12 @@ class TyreTracker:
         p0 = [0, 1, 0, 1] if self.current_tyre_parameters is None else self.current_tyre_parameters
         res = minimize(obj_fun, p0, bounds=[(-100, 100), (0.8, 1.5), (-0.2, 0.2), (0.8, 1.3)], method='Powell')
         self.current_tyre_parameters = res.x
+
+
+class WeatherTracker:
+
+    def __init__(self):
+        pass
 
 
 class ProDriver(RookieDriver):
@@ -580,18 +584,7 @@ class ProDriver(RookieDriver):
         N, D = historic_x.shape
         num_previous_steps = int((model_y.n_features_in_ - D) / (D + 1))
         if historic_x.shape[0] < num_previous_steps:
-            warnings.warn(f'Trying to make autoregressive forecast with too few historic points: '
-                          f'num_previous_steps = {num_previous_steps} but historic_x has {historic_x.shape[0]} points. '
-                          f'Trying a model refit...')
-            self.fit_track_grip()       # something has gone wrong. Refit model and see if that fixes it
-            num_previous_steps = int((model_y.n_features_in_ - D) / (D + 1))
-
-            historic_x = np.vstack([np.zeros((num_previous_steps - historic_x.shape[0], historic_x.shape[1]))])
-            if historic_x.shape[0] < num_previous_steps:
-                raise ValueError("'Refitting track grip model hasn't fixed it, something has gone wrong...")
-            else:
-                print('Refitting track grip model has fixed it but you should probably work out where the missed train '
-                      'should be called')
+            raise ValueError("'Refitting track grip model hasn't fixed it, something has gone wrong...")
 
         if current_x.ndim == 1:
             current_x = current_x[None, :]

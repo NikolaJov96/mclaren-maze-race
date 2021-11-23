@@ -199,8 +199,6 @@ class ProDriver(RookieDriver):
             if weather_state.rain_intensity == 0:           # we will already have updated them otherwise
                 self.update_target_speeds(track_state.distance_ahead, car_state, weather_state)
             self.box_box_box = self.tyre_tracker.should_we_change_tyres()
-            if self.box_box_box and self.print_info:
-                print('Box! Box! Box!')
 
             self.drs_was_active = False         # start of new straight, reset log
 
@@ -245,10 +243,6 @@ class ProDriver(RookieDriver):
                 or any(len(data) < 10 for data in self.drs_data.values())) and not targets_broken_drs:
                 action = Action.OpenDRS
                 self.drs_was_active = True
-                if self.print_info:
-                    print('Opening DRS')
-            elif self.print_info:
-                print('Chose not to open DRS')
 
         self.random_action_probability = max(self.random_action_probability * self.random_action_decay,
                                              self.min_random_action_probability)
@@ -286,27 +280,6 @@ class ProDriver(RookieDriver):
         if previous_track_state.distance_ahead == 0:          # end of straight
             if result.crashed or result.spun:
                 grip = self.get_grip(previous_car_state, weather_state=previous_weather_state)
-
-                if self.print_info:
-                    if self.last_action_was_random:
-                        print('\tCrashed! Last action was random though')
-
-                    elif previous_car_state.speed > self.target_speeds[0] + 1:
-                        if action in self.sl_data:
-                            est_speed = self.estimate_next_speed(action, previous_car_state.speed,
-                                                                 previous_car_state.drs_active, grip)
-                        else:
-                            est_speed = previous_car_state.speed
-                        print(f'\tCrashed! We targeted {self.target_speeds[0]:.0f} speed '
-                              f'but were going {previous_car_state.speed: .0f}. '
-                              f'We thought we would be going {est_speed :.0f} using a grip of {grip:.2f}.'
-                              f'DRS was {"" if self.drs_was_active else "not "}active this straight.')
-
-                    else:
-                        print(f'\tCrashed! We targeted {self.target_speeds[0]:.0f} speed '
-                              f'and were going {previous_car_state.speed: .0f}. '
-                              f'EoS speed unmodified is {self.end_of_straight_speed: .0f}. '
-                              f'We used a grip of {grip:.2f} which gives {grip * self.end_of_straight_speed: .0f}')
 
                 self.end_of_straight_speed = min(self.end_of_straight_speed,
                                                  previous_car_state.speed / grip - 10)
@@ -397,11 +370,6 @@ class ProDriver(RookieDriver):
         if assign_to_self:
             self.target_speeds = target_speeds
             self.target_speed_grips = grips_up_straight
-
-        if self.print_info and not np.array_equal(previous_targets, self.target_speeds):
-            # print(f'New target speeds: mid-straight->{np.array2string(self.target_speeds[5::-1], precision=0)}<-end. '
-            #       f'Forecasted grips are {grips_up_straight[5::-1]}')
-            self.plot_grip()
 
         return target_speeds
 

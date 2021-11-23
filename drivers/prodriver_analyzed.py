@@ -1,7 +1,6 @@
 from scipy.interpolate import interp1d, PchipInterpolator
 from scipy.optimize import minimize
 import scipy.linalg
-from time import time as time_fn
 from sklearn.linear_model import LinearRegression
 import warnings
 
@@ -14,12 +13,14 @@ class TyreTracker:
     Models tyre properties
     """
 
-    def __init__(self):
+    def __init__(self, driver):
+        self.driver = driver
         self.tyre_data = {tyre_choice: np.empty((1000, 0)) for tyre_choice in TyreChoice.get_choices()}
         self.current_tyre_choice = TyreChoice.Medium            # hard coded for now, you can improve this!
         self.current_tyre_age = 0
         self.current_base_tyre_model = None
         self.current_tyre_parameters = None
+        self.pit_loss = 3.0
 
     def choose_tyres(self, track_info: TrackInfo):
         # This method is called at the start of the race and whenever the driver chooses to make a pitstop. It needs to
@@ -28,9 +29,43 @@ class TyreTracker:
         # TODO: make an informed choice here!
         # self.current_tyre_choice = ...
 
-        self.track_info = track_info
         self.fit_base_tyre_model()
         return self.current_tyre_choice
+
+    def update_tyre_data(self, car_state: CarState):
+        if 0 == car_state.tyre_age:         # new tyre, add a column of nans ready for data
+            n = self.tyre_data[car_state.tyre_choice].shape[0]
+            self.tyre_data[car_state.tyre_choice] = np.hstack([self.tyre_data[car_state.tyre_choice],
+                                                               np.full((n, 1), np.nan)])
+        self.tyre_data[car_state.tyre_choice][car_state.tyre_age, -1] = car_state.tyre_grip
+        self.current_tyre_age = car_state.tyre_age
+        if car_state.tyre_choice != self.current_tyre_choice:
+            self.current_tyre_choice = car_state.tyre_choice
+            self.fit_base_tyre_model()
+
+    @property
+    def current_tyre_grip(self):
+        return self.get_measured_tyre_grip(self.current_tyre_age)
+
+    def get_measured_tyre_grip(self, age, tyre_choice=None):
+        if tyre_choice is None:
+            tyre_choice = self.current_tyre_choice
+
+        if self.tyre_data[tyre_choice].shape[1] == 0:
+            return np.nan
+        else:
+            return self.tyre_data[tyre_choice][age, -1]
+
+    def should_we_change_tyres(self):
+        if np.nanmin(self.tyre_data[self.current_tyre_choice]) > 0.6:
+            return False
+
+        time_current_tyres = self.driver.simulate_to_end_of_race(self.current_tyre_age)
+        time_new_tyres = self.driver.simulate_to_end_of_race(0)
+        start_grip = self.get_measured_tyre_grip(0)
+        lost_grip_fraction = (start_grip - self.current_tyre_grip) / start_grip
+
+        return time_new_tyres < time_current_tyres - self.pit_loss and lost_grip_fraction > 0.1
 
     @staticmethod
     def logistic(p, t):
@@ -66,7 +101,6 @@ class TyreTracker:
         return y_offset + y_scale * self.current_base_tyre_model(x_offset + x_scale*tyre_ages)
 
     def fit_tyre_model(self):
-        t0 = time_fn()
         # Fit the base tyre model to the new data coming in but translating it and scaling it
         ages = np.arange(self.tyre_data[self.current_tyre_choice].shape[0])
         latest_data = self.tyre_data[self.current_tyre_choice][:, -1]
@@ -93,11 +127,10 @@ class ProDriver(RookieDriver):
                          random_action_decay=random_action_decay,
                          min_random_action_probability=min_random_action_probability, *args, **kwargs)
 
-        self.tyre_tracker = TyreTracker()
+        self.tyre_tracker = TyreTracker(self)
 
         self.at_turn = False
         self.move_number = 0
-        self.pit_loss = 3.0
 
         self.track_info = None
         self.straight_ends = []
@@ -118,6 +151,7 @@ class ProDriver(RookieDriver):
         self.num_future_steps = None
 
     def choose_tyres(self, track_info: TrackInfo) -> TyreChoice:
+        self.track_info = track_info
         return self.tyre_tracker.choose_tyres(track_info)
 
     def prepare_for_race(self):
@@ -138,15 +172,7 @@ class ProDriver(RookieDriver):
             self.update_target_speeds(grips_up_straight=np.tile(car_state.tyre_grip, track_state.distance_ahead))
 
         # Store the tyre data
-        if 0 == car_state.tyre_age:         # new tyre, add a column of nans ready for data
-            n = self.tyre_data[car_state.tyre_choice].shape[0]
-            self.tyre_data[car_state.tyre_choice] = np.hstack([self.tyre_data[car_state.tyre_choice],
-                                                               np.full((n, 1), np.nan)])
-        self.tyre_data[car_state.tyre_choice][car_state.tyre_age, -1] = car_state.tyre_grip
-        self.current_tyre_age = car_state.tyre_age
-        if car_state.tyre_choice != self.current_tyre_choice:
-            self.current_tyre_choice = car_state.tyre_choice
-            self.fit_base_tyre_model()
+        self.tyre_tracker.update_tyre_data(car_state)
 
         # Weather
         if weather_state.rain_intensity > 0:
@@ -171,12 +197,8 @@ class ProDriver(RookieDriver):
         # every move but limit it to avoid slowing code down too much
         elif track_state.distance_ahead > 0 and self.at_turn:
             if weather_state.rain_intensity == 0:           # we will already have updated them otherwise
-                t0 = time_fn()
                 self.update_target_speeds(track_state.distance_ahead, car_state, weather_state)
-                # print(f'\tUpdating target speeds took {time_fn() - t0: .2f} seconds')
-            t0 = time_fn()
-            self.box_box_box = self.should_we_change_tyres()
-            # print(f'\tTesting pit stop {time_fn() - t0: .2f} seconds')
+            self.box_box_box = self.tyre_tracker.should_we_change_tyres()
             if self.box_box_box and self.print_info:
                 print('Box! Box! Box!')
 
@@ -297,12 +319,8 @@ class ProDriver(RookieDriver):
                                                  self.lowest_crash_speed)
 
             # Refit tyre model now we have more data
-            t0 = time_fn()
-            self.fit_tyre_model()
-            # print(f'\tFitting tyre model took {time_fn() - t0: .2f} seconds')
-            t0 = time_fn()
+            self.tyre_tracker.fit_tyre_model()
             self.fit_track_grip()
-            # print(f'\tFitting track grip model took {time_fn() - t0: .2f} seconds')
 
         # record the change in speed resulting from the action we took
         elif action in self.sl_data and self.move_number > self.last_raining_move + 30:
@@ -349,8 +367,6 @@ class ProDriver(RookieDriver):
     def update_target_speeds(self, distance_ahead=None, car_state=None, weather_state=None, grips_up_straight=None,
                              assign_to_self=True):
         """ Either need to specify distance_ahead, car_state, and weather_state or a custom set of grips_up_straight """
-        t0 = time_fn()
-
         if grips_up_straight is None:
             grips = self.get_grip(car_state, distance_ahead, weather_state=weather_state)  # from start to end of straight
             grips *= 0.95                                       # add a little safety margin to our prediction
@@ -390,10 +406,9 @@ class ProDriver(RookieDriver):
         return target_speeds
 
     def simulate_straight(self, speed, distance_ahead, drs_active, safety_car_active, weather_state=None, grips=None):
-        t0 = time_fn()
         if grips is None:
-            grips = self.get_grip(car_state=None, turns_ahead=distance_ahead, tyre_grip=self.current_tyre_grip,
-                                  tyre_age=self.current_tyre_age, weather_state=weather_state)
+            grips = self.get_grip(car_state=None, turns_ahead=distance_ahead, tyre_grip=self.tyre_tracker.current_tyre_grip,
+                                  tyre_age=self.tyre_tracker.current_tyre_age, weather_state=weather_state)
             target_speeds = self.target_speeds
         else:
             # Custom grips provided, need to get custom target speeds to match them
@@ -411,34 +426,21 @@ class ProDriver(RookieDriver):
 
         return time, break_target_speed, speeds, grips
 
-    @property
-    def current_tyre_grip(self):
-        return self.get_measured_tyre_grip(self.current_tyre_age)
-
-    def get_measured_tyre_grip(self, age, tyre_choice=None):
-        if tyre_choice is None:
-            tyre_choice = self.current_tyre_choice
-
-        if self.tyre_data[tyre_choice].shape[1] == 0:
-            return np.nan
-        else:
-            return self.tyre_data[tyre_choice][age, -1]
-
     def get_grip(self, car_state: Union[CarState, None] = None, turns_ahead=0, tyre_grip=None, tyre_age=None,
                  weather_state=None, exclude_track=False):
         if car_state is not None:
             tyre_grip = car_state.tyre_grip
             tyre_age = car_state.tyre_age
         if tyre_age is None:
-            tyre_age = self.current_tyre_age
+            tyre_age = self.tyre_tracker.current_tyre_age
         if tyre_grip is None:
-            tyre_grip = self.get_measured_tyre_grip(tyre_age)
+            tyre_grip = self.tyre_tracker.get_measured_tyre_grip(tyre_age)
 
         if 0 == turns_ahead:
             grip = max(tyre_grip, 0.1)
         else:
             ages = tyre_age + np.arange(1, turns_ahead + 1)
-            future_grips = self.forecast_tyre_grip(ages)
+            future_grips = self.tyre_tracker.forecast_tyre_grip(ages)
             grip = np.maximum(np.concatenate([[tyre_grip], future_grips]), 0.1)
 
         # Track grip from rain
@@ -451,19 +453,6 @@ class ProDriver(RookieDriver):
             grip *= track_grip
 
         return np.maximum(grip, 0.1)             # if predicted grip drops too low we can get stuck
-
-    def should_we_change_tyres(self):
-        if np.nanmin(self.tyre_data[self.current_tyre_choice]) > 0.6:
-            return False
-
-        t0 = time_fn()
-
-        time_current_tyres = self.simulate_to_end_of_race(self.current_tyre_age)
-        time_new_tyres = self.simulate_to_end_of_race(0)
-        start_grip = self.get_measured_tyre_grip(0)
-        lost_grip_fraction = (start_grip - self.current_tyre_grip) / start_grip
-
-        return time_new_tyres < time_current_tyres - self.pit_loss and lost_grip_fraction > 0.1
 
     def simulate_to_end_of_race(self, start_tyre_age):
         straights_remaining = max(self.track_info.number_of_straights - len(self.straight_ends), 1)
@@ -527,7 +516,6 @@ class ProDriver(RookieDriver):
         return track_grips, weather_data
 
     def fit_track_grip(self):
-        t0 = time_fn()
         if not self.weather_on:
             return
 
@@ -572,7 +560,6 @@ class ProDriver(RookieDriver):
             if self.track_grip_model_x is None:
                 self.track_grip_model_x = LinearRegression()
 
-            t1 = time_fn()
             self.track_grip_model_y.fit(y_inputs_all, y_targets_all)
             self.track_grip_model_x.fit(x_inputs_all, x_targets_all)
             self.num_previous_steps = num_previous_steps

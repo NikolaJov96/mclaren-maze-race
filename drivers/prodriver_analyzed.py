@@ -410,17 +410,19 @@ class GripTracker:
         return np.maximum(grip, 0.1)             # if predicted grip drops too low we can get stuck
 
 
-class ProDriver(RookieDriver):
+class ProDriver(Driver):
     def __init__(self, name, random_action_probability=0.5, random_action_decay=0.96,
                  min_random_action_probability=0.0, *args, **kwargs):
 
-        super().__init__(name, random_action_probability=random_action_probability,
-                         random_action_decay=random_action_decay,
-                         min_random_action_probability=min_random_action_probability, *args, **kwargs)
+        super().__init__(name, *args, **kwargs)
 
         self.tyre_tracker = TyreTracker()
         self.weather_tracker = WeatherTracker()
         self.grip_tracker = GripTracker()
+
+        self.random_action_probability = random_action_probability
+        self.random_action_decay = random_action_decay
+        self.min_random_action_probability = min_random_action_probability
 
         self.at_turn = False
         self.move_number = 0
@@ -431,6 +433,86 @@ class ProDriver(RookieDriver):
         self.box_box_box = False
         self.last_action_was_random = False
         self.target_speed_grips = None
+
+        self.correct_turns = {}
+        self.safety_car_speed = 150         # initialise it to be at a medium speed
+
+        self.sl_data = {action: [] for action in Action.get_sl_actions()}
+        self.drs_data = {action: [] for action in [Action.LightThrottle, Action.FullThrottle, Action.Continue]}
+        self.end_of_straight_speed = 350        # initialising to something large
+        self.lowest_crash_speed = 350
+        self.target_speeds = 350 * np.ones(50)
+
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        # Called after the race by RaceControl
+        self.correct_turns.update(correct_turns)            # dictionary mapping Position -> TurnLeft or TurnRight
+
+    def _update_safety_car(self, new_car_state: CarState, result: ActionResult):
+        if result.safety_car_speed_exceeded:  # we ended up going too fast so safe speed must be below current speed
+            if new_car_state.speed - 10 < self.safety_car_speed:
+                self.safety_car_speed = new_car_state.speed - 10
+                if self.print_info:
+                    print(f'\tDecreasing estimate of safety car speed to {self.safety_car_speed: .1f}')
+            elif self.print_info:
+                print(f'Safety car speed estimate of {self.safety_car_speed: .1f} already below car speed of '
+                      f'{new_car_state.speed: .1f}')
+
+        else:  # our current speed is safe, so safety car speed must be higher
+            if new_car_state.speed + 1 > self.safety_car_speed:
+                self.safety_car_speed = new_car_state.speed + 1
+                if self.print_info:
+                    print(f'\tIncreasing estimate of safety car speed to {self.safety_car_speed: .1f}')
+
+    def _choose_turn_direction(self, track_state: TrackState):
+        # Check if we need to make a decision about which way to turn
+        if track_state.distance_left > 0 and track_state.distance_right > 0:  # both options available, need to decide
+            if len(self.correct_turns) > 0:
+                # Find the closest turn we have seen previously and turn in the same direction
+                distances = np.array([track_state.position.distance_to(turn_position)
+                                      for turn_position in self.correct_turns])
+                i_closest = np.argmin(distances)
+                return list(self.correct_turns.values())[i_closest]
+
+            else:  # First race, no data yet so choose randomly
+                return driver_rng().choice([Action.TurnLeft, Action.TurnRight])
+
+        elif track_state.distance_left > 0:  # only left turn
+            return Action.TurnLeft
+
+        else:
+            return Action.TurnRight  # only right or dead-end
+
+    def _choose_move_from_models(self, speed: float, target_speed: float, drs_active: bool, **kwargs):
+        # Test each action to see which will get us closest to our target speed
+        actions = Action.get_sl_actions()
+        if 0 == speed:  # yes this is technically cheating but you can get stuck here with low grip so bending the rules
+            actions = [Action.LightThrottle, Action.FullThrottle]
+        next_speeds = np.array([self.estimate_next_speed(action, speed, drs_active, **kwargs) for action in actions])
+        errors = next_speeds - target_speed    # difference between predicted next speed and target, +ve => above target
+
+        # The target speed is the maximum safe speed so we want to be under the target if possible. This means we don't
+        # necessarily want the action with the smallest error
+        if np.any(errors <= 0):            # under or equal to the target speed
+            errors[errors > 0] = np.inf    # at least one action gets us under the speed so ignore others even if close
+
+        # Now we can choose the action with the smallest error score. At the start there will be multiple actions with
+        # with the same score, so we will choose randomly from these
+        min_error = np.min(errors ** 2)
+        available_actions = [action for action, error in zip(actions, errors)
+                             if np.abs(error ** 2 - min_error) < 1e-3]
+
+        return driver_rng().choice(available_actions)
+
+    def estimate_previous_speed(self, test_input_speeds: np.ndarray, test_output_speeds: np.ndarray, speed):
+        errors = (test_output_speeds - speed)**2
+        speeds_min_error = test_input_speeds[errors == np.min(errors)]
+        return np.max(speeds_min_error)
+
+    def get_data(self, action, drs_active=False):
+        if drs_active and action in self.drs_data:
+            return self.drs_data[action]
+        else:
+            return self.sl_data[action]
 
     def choose_tyres(self, track_info: TrackInfo) -> TyreChoice:
         self.track_info = track_info
@@ -499,7 +581,7 @@ class ProDriver(RookieDriver):
                                                    grip_multiplier=current_grip)
             self.last_action_was_random = False
         else:
-            action = self._choose_randomly(Action.get_sl_actions())
+            action = driver_rng().choice(Action.get_sl_actions())
             self.last_action_was_random = True
 
         # If DRS is available then need to decide whether to open DRS or not.

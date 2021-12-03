@@ -432,9 +432,13 @@ class MyDriver(Driver):
 
         self.sl_data = {action: [] for action in Action.get_sl_actions()}
         self.drs_data = {action: [] for action in [Action.LightThrottle, Action.FullThrottle, Action.Continue]}
-        self.end_of_straight_speed = 350        # initialising to something large
+        self.end_of_straight_speed_low = 10
+        self.end_of_straight_speed_high = 300
         self.lowest_crash_speed = 350
         self.target_speeds = 350 * np.ones(50)
+
+    def end_of_straight_speed(self):
+        return (self.end_of_straight_speed_low * 5.0 + self.end_of_straight_speed_high) / 6.0
 
     def _choose_turn_direction(self, track_state: TrackState):
         # Check if we need to make a decision about which way to turn
@@ -623,26 +627,29 @@ class MyDriver(Driver):
         self.safety_car_tracker.action_result(new_car_state, result)
 
         if previous_track_state.distance_ahead == 0:          # end of straight
-            if result.crashed or result.spun:
-                grip = self.grip_tracker.get_grip(
-                    self.tyre_tracker,
-                    self.weather_tracker,
-                    previous_car_state,
-                    weather_state=previous_weather_state)
+            if previous_track_state.distance_left > 0 or previous_track_state.distance_right > 0:
+                if result.crashed or result.spun:
+                    grip = self.grip_tracker.get_grip(
+                        self.tyre_tracker,
+                        self.weather_tracker,
+                        previous_car_state,
+                        weather_state=previous_weather_state)
 
-                self.end_of_straight_speed = min(self.end_of_straight_speed,
-                                                 previous_car_state.speed / grip - 10)
-                if previous_track_state.distance_left > 0 or previous_track_state.distance_right > 0:
-                    self.lowest_crash_speed = min(previous_car_state.speed / grip, self.lowest_crash_speed)
-            else:
-                previous_grip = self.grip_tracker.get_grip(
-                    self.tyre_tracker,
-                    self.weather_tracker,
-                    previous_car_state,
-                    weather_state=previous_weather_state)
-                self.end_of_straight_speed = min(max(self.end_of_straight_speed,
-                                                 (previous_car_state.speed / previous_grip) + 1),
-                                                 self.lowest_crash_speed)
+                    # self.end_of_straight_speed = min(self.end_of_straight_speed,
+                    #                                  previous_car_state.speed / grip - 10)
+                    self.end_of_straight_speed_high = min(self.end_of_straight_speed_high, previous_car_state.speed / grip + 1.0)
+                    self.end_of_straight_speed_low = min(self.end_of_straight_speed_high - 20.0, self.end_of_straight_speed_low)
+                    # if previous_track_state.distance_left > 0 or previous_track_state.distance_right > 0:
+                    #     self.lowest_crash_speed = min(previous_car_state.speed / grip, self.lowest_crash_speed)
+                else:
+                    previous_grip = self.grip_tracker.get_grip(
+                        self.tyre_tracker,
+                        self.weather_tracker,
+                        previous_car_state,
+                        weather_state=previous_weather_state)
+                    # self.end_of_straight_speed = min(max(self.end_of_straight_speed, (previous_car_state.speed / previous_grip) + 1),
+                    #                                  self.lowest_crash_speed)
+                    self.end_of_straight_speed_low = max(self.end_of_straight_speed_low, previous_car_state.speed / previous_grip - 1)
 
             # Refit tyre model now we have more data
             self.tyre_tracker.fit_tyre_model()
@@ -724,7 +731,7 @@ class MyDriver(Driver):
 
         previous_targets = np.copy(self.target_speeds)
         target_speeds = np.zeros_like(self.target_speeds)
-        speed = self.end_of_straight_speed * grips_up_straight[0]       # modify by expected grip at end of straight
+        speed = self.end_of_straight_speed() * grips_up_straight[0]       # modify by expected grip at end of straight
         if potential_stop:
             speed = 0
             previous_grip = grips_up_straight[min(1, len(grips_up_straight) - 1)]
@@ -793,9 +800,9 @@ class MyDriver(Driver):
             tyre_age=start_tyre_age,
             exclude_track=True)
         speeds = 500 * np.ones(num_moves + 1)     # add fake corner in at the end as this driver brakes for the finish
-        speeds[0] = self.end_of_straight_speed * grips[0]       # should really be previous grip but close enough
+        speeds[0] = self.end_of_straight_speed() * grips[0]       # should really be previous grip but close enough
         # speed of turns
-        speeds[straight_length::(straight_length+1)] = self.end_of_straight_speed * grips[straight_length::(
+        speeds[straight_length::(straight_length+1)] = self.end_of_straight_speed() * grips[straight_length::(
                 straight_length+1)]
         # Speed starting next straight same as turn
         speeds[straight_length+1::(straight_length+1)] = speeds[straight_length:-2:(straight_length+1)]

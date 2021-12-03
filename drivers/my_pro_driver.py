@@ -553,7 +553,7 @@ class MyDriver(Driver):
             self.tyre_tracker, self.weather_tracker, car_state, turns_ahead=0, weather_state=weather_state)
 
         # Choose action that gets us closest to target, or choose randomly
-        if driver_rng().rand() > self.random_action_probability:
+        if driver_rng().rand() > self.random_action_probability or track_state.safety_car_active or track_state.distance_ahead < 4:
             action = self._choose_move_from_models(car_state.speed, target_speed, car_state.drs_active,
                                                    grip_multiplier=current_grip)
             self.last_action_was_random = False
@@ -581,8 +581,9 @@ class MyDriver(Driver):
 
             if (time_drs < time_no_drs or driver_rng().rand() < self.random_action_probability
                 or any(len(data) < 10 for data in self.drs_data.values())) and not targets_broken_drs:
-                action = Action.OpenDRS
-                self.drs_was_active = True
+                if not track_state.safety_car_active and track_state.distance_ahead > 4:
+                    action = Action.OpenDRS
+                    self.drs_was_active = True
 
         self.random_action_probability = max(self.random_action_probability * self.random_action_decay,
                                              self.min_random_action_probability)

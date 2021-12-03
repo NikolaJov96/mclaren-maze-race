@@ -6,8 +6,230 @@ from sklearn.linear_model import LinearRegression
 from drivers.driver import *
 from drivers.rookiedriver import RookieDriver
 
-from nikola.turn_tracker import RealtimeTurnTracker
-from nikola.safety_car_tracker import SafetyCarTracker
+
+class SafetyCarTracker:
+    """
+    Tracks safety car speeds
+    """
+
+    MIN_SPEED = 30
+    MAX_SPEED = 300
+
+    def __init__(self):
+        # List of different safety car instances with different speeds
+        self.bounds = []
+        # Safety car counter
+        self.safety_car_id = -1
+        # Penalty amount during a race
+        self.race_penalties = 0
+        # Penalty amount during a safety car event
+        self.instance_penalties = 0
+        # Current/temporary speed bounds
+        self.temp_bounds = None
+        # Tracks continuous safety car event
+        self.was_safety_car_previous_turn = False
+        # Force braking next turn
+        self.force_braking = False
+
+    def new_race(self):
+        self.safety_car_id = -1
+        self.race_penalties = 0
+        self.instance_penalties = 0
+        self.temp_bounds = None
+        self.was_safety_car_previous_turn = False
+        self.force_braking = False
+
+    def new_track_state(self, track_state: TrackState):
+        if track_state.safety_car_active:
+
+            if not self.was_safety_car_previous_turn:
+                # Commit temporary bounds from the previous safety car event in the race if one exists
+                if self.temp_bounds is not None and self.safety_car_id >= 0:
+                    self.bounds[self.safety_car_id] = self.temp_bounds
+
+                # Safety car just activated
+                self.safety_car_id += 1
+                self.instance_penalties = 0
+                self.was_safety_car_previous_turn = True
+
+                if self.safety_car_id >= len(self.bounds):
+                    # Safety car iteration not seen before
+                    self.bounds.append([SafetyCarTracker.MIN_SPEED, SafetyCarTracker.MAX_SPEED])
+
+                # Prepare temp bounds fot this event
+                self.temp_bounds = self.bounds[self.safety_car_id].copy()
+
+            # If under the penalty threshold experiment, else play safe
+            if self.force_braking:
+                self.force_braking = False
+                return 0
+            elif self.instance_penalties < 1 and self.race_penalties < 6:
+                return sum(self.temp_bounds) / 2.0
+            else:
+                return self.temp_bounds[0]
+
+        else:
+            # Event ending
+            self.was_safety_car_previous_turn = False
+            self.force_braking = False
+            return 1e+5
+
+    def action_result(self, new_car_state: CarState, result: ActionResult):
+        if self.was_safety_car_previous_turn:
+            if result.safety_car_speed_exceeded:
+                # Record the penalty and lover the speed bounds
+                self.race_penalties += 1
+                self.instance_penalties += 1
+                self.temp_bounds[1] = min(self.temp_bounds[1], new_car_state.speed)
+            else:
+                # Increase the speed bounds
+                self.temp_bounds[0] = max(self.temp_bounds[0], new_car_state.speed)
+
+            if self.temp_bounds[0] > self.temp_bounds[1]:
+                # Fingers crossed
+                # Event was started immediately after the previous one finished so the change cannot be detected
+                # Discard faulty temp bounds and roll to the next safety car id
+                self.temp_bounds = None
+                self.was_safety_car_previous_turn = False
+                self.force_braking = True
+
+        # Make sure what we learned from the last event is stored
+        if result.finished and self.temp_bounds is not None and self.safety_car_id >= 0:
+            self.bounds[self.safety_car_id] = self.temp_bounds
+
+
+class RealtimeTurnTracker:
+    """
+    Tracks correct turns in real time, without waiting for the end of the race
+    """
+
+    class RealtimeTrackerState:
+        """
+        Base class for turn tracker states
+        """
+
+        def __init__(self, turn_tracker):
+            self.turn_tracker = turn_tracker
+
+        def new_track_state(self, track_state, is_final):
+            raise NotImplementedError
+
+
+    class DefaultRealtimeTrackerState(RealtimeTrackerState):
+        """
+        Turn tracker state when no turns are being examined
+        """
+
+        def new_track_state(self, track_state, is_final):
+            if is_final:
+                return self
+
+            if track_state.distance_ahead == 0 and \
+                    track_state.distance_left > 0 and \
+                    track_state.distance_right > 0:
+                return RealtimeTurnTracker.TurnJustTakenRealtimeTrackerState(self.turn_tracker)
+            else:
+                return self
+
+
+    class TurnJustTakenRealtimeTrackerState(RealtimeTrackerState):
+        """
+        Turn tracker state when a turn has just been taken
+        Used to determine which action (TurnLeft or TurnRight) was used
+        Only active during one state
+        """
+
+        def new_track_state(self, track_state, is_final):
+
+            def heading_from_pos(pos1, pos2):
+                return Heading(pos2.row - pos1.row, pos2.column - pos1.column)
+
+            current_heading = heading_from_pos(
+                self.turn_tracker.current_position(),
+                self.turn_tracker.last_position())
+            last_heading = heading_from_pos(
+                self.turn_tracker.last_position(),
+                self.turn_tracker.before_last_position())
+
+            if last_heading.get_left_heading() == current_heading:
+                taken_action = Action.TurnLeft
+            elif last_heading.get_right_heading() == current_heading:
+                taken_action = Action.TurnRight
+            else:
+                raise ValueError
+
+            return RealtimeTurnTracker.CheckingTakenTurnRealtimeTrackerState(
+                self.turn_tracker, taken_action).new_track_state(track_state, is_final)
+
+
+    class CheckingTakenTurnRealtimeTrackerState(RealtimeTrackerState):
+        """
+        Turn tracker state when waiting to reach the end of a straight
+        to determine if the previous turn was correct
+        """
+
+        def __init__(self, turn_tracker, taken_action):
+            super().__init__(turn_tracker)
+            self.turn_position = self.turn_tracker.last_position()
+            self.taken_action = taken_action
+
+        def new_track_state(self, track_state, is_final):
+            if track_state.distance_ahead > 0:
+                return self
+
+            if track_state.distance_left > 0 or track_state.distance_right > 0 or is_final:
+                # No dead end, correct turn taken
+                self.turn_tracker.put_correct_turn(self.turn_position, self.taken_action)
+            else:
+                # Dead end, wrong turn taken
+                action = Action.TurnLeft if self.taken_action == Action.TurnRight else Action.TurnRight
+                self.turn_tracker.put_correct_turn(self.turn_position, action)
+
+            # Immediately check if new default state is finished
+            return RealtimeTurnTracker.DefaultRealtimeTrackerState(self.turn_tracker).\
+                new_track_state(track_state, False)
+
+    def __init__(self):
+        self.correct_turns = {}
+        self._current_state = None
+        self._recent_car_positions = []
+        self._this_race_correct_turns = {}
+
+    def new_race(self):
+        # Reinitialize current race parameters
+        self._current_state = RealtimeTurnTracker.DefaultRealtimeTrackerState(self)
+        self._recent_car_positions = []
+        self._this_race_correct_turns = {}
+
+    def new_track_state(self, track_state, is_final=False):
+        # Skip in case of the same position as was the last
+        if len(self._recent_car_positions) > 0 and self._recent_car_positions[-1] == track_state.position:
+            return
+
+        # Record new position
+        self._recent_car_positions.append(track_state.position)
+        if len(self._recent_car_positions) > 3:
+            self._recent_car_positions = self._recent_car_positions[-3:]
+
+        # Update the tracker state
+        self._current_state = self._current_state.new_track_state(track_state, is_final)
+        assert self._current_state is not None
+
+    def current_position(self):
+        return self._recent_car_positions[-1]
+
+    def last_position(self):
+        return self._recent_car_positions[-2]
+
+    def before_last_position(self):
+        return self._recent_car_positions[-3]
+
+    def put_correct_turn(self, position, action):
+        self.correct_turns[position] = action
+        self._this_race_correct_turns[position] = action
+
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        assert correct_turns == self._this_race_correct_turns
 
 
 class TurnChooser:
@@ -532,6 +754,15 @@ class MyDriver(Driver):
 
             self.at_turn = True
 
+        # Update the target speeds at the start of a straight, to take tyre degradation into account. We could do this
+        # every move but limit it to avoid slowing code down too much
+        elif track_state.distance_ahead > 0 and self.at_turn:
+            if weather_state.rain_intensity == 0:           # we will already have updated them otherwise
+                self.update_target_speeds(self.potential_stop, track_state.distance_ahead, car_state, weather_state)
+            self.box_box_box = self.tyre_tracker.should_we_change_tyres(self)
+
+            self.drs_was_active = False         # start of new straight, reset log
+
         # Get the current grip level
         current_grip = self.grip_tracker.get_grip(
             self.tyre_tracker, self.weather_tracker, car_state, turns_ahead=0, weather_state=weather_state)
@@ -543,23 +774,16 @@ class MyDriver(Driver):
                                                    grip_multiplier=current_grip)
             else:
                 # Have to turn (in case of a spin we will be back in this state with the speed=0)
+                if self.box_box_box:
+                    if car_state.speed > 0:
+                        return self._choose_move_from_models(car_state.speed, 0.0, car_state.drs_active,
+                                                   grip_multiplier=current_grip)
+                    else:
+                        self.box_box_box = False
+                        return Action.ChangeTyres
                 return self._choose_turn_direction(track_state)
 
-        # Update the target speeds at the start of a straight, to take tyre degradation into account. We could do this
-        # every move but limit it to avoid slowing code down too much
-        elif track_state.distance_ahead > 0 and self.at_turn:
-            if weather_state.rain_intensity == 0:           # we will already have updated them otherwise
-                self.update_target_speeds(self.potential_stop, track_state.distance_ahead, car_state, weather_state)
-            self.box_box_box = self.tyre_tracker.should_we_change_tyres(self)
-
-            self.drs_was_active = False         # start of new straight, reset log
-
         self.at_turn = False
-
-        # Are we changing tyres?
-        if self.box_box_box and car_state.speed == 0:
-            self.box_box_box = False
-            return Action.ChangeTyres
 
         # Get the target speed
         target_speed = self._get_target_speed(track_state.distance_ahead, track_state.safety_car_active)
@@ -606,7 +830,7 @@ class MyDriver(Driver):
         if target_speeds is None:
             target_speeds = self.target_speeds
 
-        if distance_ahead == 0 or self.box_box_box:
+        if distance_ahead == 0:  # or self.box_box_box:
             target_speed = 0                                            # dead end - need to stop!!
         else:
             target_speed = target_speeds[distance_ahead - 1]       # target for next step
@@ -636,27 +860,22 @@ class MyDriver(Driver):
 
         if previous_track_state.distance_ahead == 0:          # end of straight
             if previous_track_state.distance_left > 0 or previous_track_state.distance_right > 0:
-                if result.crashed or result.spun:
-                    grip = self.grip_tracker.get_grip(
-                        self.tyre_tracker,
-                        self.weather_tracker,
-                        previous_car_state,
-                        weather_state=previous_weather_state)
+                if result.crashed or result.spun :
+                    if previous_car_state.speed > self.end_of_straight_speed_low:
+                        grip = self.grip_tracker.get_grip(
+                            self.tyre_tracker,
+                            self.weather_tracker,
+                            previous_car_state,
+                            weather_state=previous_weather_state)
 
-                    # self.end_of_straight_speed = min(self.end_of_straight_speed,
-                    #                                  previous_car_state.speed / grip - 10)
-                    self.end_of_straight_speed_high = min(self.end_of_straight_speed_high, previous_car_state.speed / grip + 1.0)
-                    self.end_of_straight_speed_low = min(self.end_of_straight_speed_high - 20.0, self.end_of_straight_speed_low)
-                    # if previous_track_state.distance_left > 0 or previous_track_state.distance_right > 0:
-                    #     self.lowest_crash_speed = min(previous_car_state.speed / grip, self.lowest_crash_speed)
+                        self.end_of_straight_speed_high = min(self.end_of_straight_speed_high, previous_car_state.speed / grip + 1.0)
+                        self.end_of_straight_speed_low = min(self.end_of_straight_speed_high - 20.0, self.end_of_straight_speed_low)
                 else:
                     previous_grip = self.grip_tracker.get_grip(
                         self.tyre_tracker,
                         self.weather_tracker,
                         previous_car_state,
                         weather_state=previous_weather_state)
-                    # self.end_of_straight_speed = min(max(self.end_of_straight_speed, (previous_car_state.speed / previous_grip) + 1),
-                    #                                  self.lowest_crash_speed)
                     self.end_of_straight_speed_low = max(self.end_of_straight_speed_low, previous_car_state.speed / previous_grip - 1)
 
             # Refit tyre model now we have more data

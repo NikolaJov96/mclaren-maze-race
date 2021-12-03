@@ -7,10 +7,11 @@ from imports import *
 from drivers.driver import Driver
 from drivers.prodriver import ProDriver
 from drivers.prodriver_analyzed import ProDriver as ProDriver2
+from drivers.my_pro_driver import MyDriver
 from nikola.race_logger import RaceLogger
 
 
-class ProDriverLooged(ProDriver2):
+class ProDriverLooged(MyDriver):
 
     def __init__(self, name, race_logger_dir, *args, **kwargs):
         super().__init__(name, *args, **kwargs)

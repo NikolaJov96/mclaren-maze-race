@@ -1,3 +1,4 @@
+from typing import List
 from scipy.interpolate import interp1d, PchipInterpolator
 from scipy.optimize import minimize
 from sklearn.linear_model import LinearRegression
@@ -6,8 +7,43 @@ from drivers.driver import *
 from drivers.rookiedriver import RookieDriver
 
 from nikola.turn_tracker import RealtimeTurnTracker
-from nikola.turn_chooser import TurnChooser
 from nikola.safety_car_tracker import SafetyCarTracker
+
+
+class TurnChooser:
+    """
+    Weights multiple closest points to choose the next turn
+    """
+
+    def __init__(self, num_closest) -> None:
+        self.num_closest = num_closest
+
+    def t_junction_choose_turn(
+            self,
+            position: Position,
+            correct_turns: Dict[Position, Action],
+            left_right_distance: List[int]):
+        if len(correct_turns) == 0:
+            return Action.TurnLeft if left_right_distance[0] < left_right_distance[1] else Action.TurnRight
+
+        # Find multiple closest data-points
+        distances = np.array([position.distance_to(turn_position) for turn_position in correct_turns])
+        closest_ids = np.argsort(distances)[:min(self.num_closest, len(distances))]
+        correct_actions = list(correct_turns.values())
+
+        # If one is exact, use it
+        if distances[closest_ids[0]] == 0:
+            return correct_actions[closest_ids[0]]
+        # If the closest one is too far, pick the shorter straight
+        if distances[closest_ids[0]] > 10.0:
+            return Action.TurnLeft if left_right_distance[0] < left_right_distance[1] else Action.TurnRight
+
+        # Else use the weighted sum
+        left_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnLeft]
+        right_ids = [i for i in closest_ids if correct_actions[i] == Action.TurnRight]
+        left_weight = sum(map(lambda d: 1.0 / d, distances[left_ids]))
+        right_weight = sum(map(lambda d: 1.0 / d, distances[right_ids]))
+        return Action.TurnLeft if left_weight > right_weight else Action.TurnRight
 
 
 class TyreTracker:
@@ -66,7 +102,7 @@ class TyreTracker:
         start_grip = self.get_measured_tyre_grip(0)
         lost_grip_fraction = (start_grip - self.current_tyre_grip) / start_grip
 
-        return time_new_tyres < time_current_tyres - self.pit_loss and lost_grip_fraction > 0.1
+        return time_new_tyres * 0.95 < time_current_tyres - self.pit_loss and lost_grip_fraction > 0.1
 
     @staticmethod
     def logistic(p, t):
@@ -364,7 +400,7 @@ class GripTracker:
         return np.maximum(grip, 0.1)             # if predicted grip drops too low we can get stuck
 
 
-class ProDriver(Driver):
+class MyDriver(Driver):
     def __init__(self, name, random_action_probability=0.5, random_action_decay=0.96,
                  min_random_action_probability=0.0, *args, **kwargs):
 
@@ -385,6 +421,7 @@ class ProDriver(Driver):
 
         self.at_turn = False
         self.move_number = 0
+        self.potential_stop = False
 
         self.track_info = None
         self.straight_ends = []
@@ -402,7 +439,7 @@ class ProDriver(Driver):
     def _choose_turn_direction(self, track_state: TrackState):
         # Check if we need to make a decision about which way to turn
         if track_state.distance_left > 0 and track_state.distance_right > 0:  # both options available, need to decide
-            self.turn_chooser.t_junction_choose_turn(
+            return self.turn_chooser.t_junction_choose_turn(
                 track_state.position,
                 self.turn_tracker.correct_turns,
                 [track_state.distance_left, track_state.distance_right])
@@ -458,6 +495,8 @@ class ProDriver(Driver):
         self.turn_tracker.new_race()
         # Start new race in the safety car tracker
         self.safety_car_tracker.new_race()
+        # No way for an initial straight to be a dead end
+        self.potential_stop = False
 
     def choose_aero(self, track_info):
         return AeroSetup.Balanced
@@ -468,7 +507,7 @@ class ProDriver(Driver):
 
         self.move_number += 1
         if 1 == self.move_number:
-            self.update_target_speeds(grips_up_straight=np.tile(car_state.tyre_grip, track_state.distance_ahead))
+            self.update_target_speeds(self.potential_stop, grips_up_straight=np.tile(car_state.tyre_grip, track_state.distance_ahead))
 
         # Store the tyre data
         self.tyre_tracker.update_tyre_data(car_state)
@@ -477,7 +516,7 @@ class ProDriver(Driver):
         self.weather_tracker.update_weather_data(weather_state, self.move_number)
         if weather_state.rain_intensity > 0:
             self.weather_tracker.fit_track_grip()
-            self.update_target_speeds(track_state.distance_ahead, car_state, weather_state)
+            self.update_target_speeds(self.potential_stop, track_state.distance_ahead, car_state, weather_state)
 
         # If we are at the end of the straight and it is not a dead end then choose the turn direction
         if track_state.distance_ahead == 0 and not (track_state.distance_left == 0 and track_state.distance_right == 0
@@ -494,7 +533,7 @@ class ProDriver(Driver):
         # every move but limit it to avoid slowing code down too much
         elif track_state.distance_ahead > 0 and self.at_turn:
             if weather_state.rain_intensity == 0:           # we will already have updated them otherwise
-                self.update_target_speeds(track_state.distance_ahead, car_state, weather_state)
+                self.update_target_speeds(self.potential_stop, track_state.distance_ahead, car_state, weather_state)
             self.box_box_box = self.tyre_tracker.should_we_change_tyres(self)
 
             self.drs_was_active = False         # start of new straight, reset log
@@ -655,7 +694,14 @@ class ProDriver(Driver):
             new_car_state.speed,
             previous_car_state.speed)
 
-    def update_target_speeds(self, distance_ahead=None, car_state=None, weather_state=None, grips_up_straight=None,
+        # Check the possibility of the next straight being a dead end
+        if previous_track_state.distance_ahead == 0 and new_track_state.distance_ahead > 0:
+            if previous_track_state.distance_left > 0 and previous_track_state.distance_right > 0:
+                self.potential_stop = True
+            else:
+                self.potential_stop = False
+
+    def update_target_speeds(self, potential_stop, distance_ahead=None, car_state=None, weather_state=None, grips_up_straight=None,
                              assign_to_self=True):
         """ Either need to specify distance_ahead, car_state, and weather_state or a custom set of grips_up_straight """
         if grips_up_straight is None:
@@ -668,16 +714,24 @@ class ProDriver(Driver):
             grips *= 0.95                                       # add a little safety margin to our prediction
             grips_up_straight = np.atleast_1d(grips)[::-1]
 
-        previous_targets = np.copy(self.target_speeds)
-        target_speeds = np.zeros_like(self.target_speeds)
-        speed = self.end_of_straight_speed * grips_up_straight[0]       # modify by expected grip at end of straight
-
         # Pre compute the changes in speed for quicker look up. As the grip changes down the straight we compute deltas
         # with grip = 1 and then convert to next speeds later
         test_input_speeds = np.linspace(0, 350, 351)
         test_speed_deltas = {action: self.estimate_next_speed(action, test_input_speeds, False, grip_multiplier=1)
                                      - test_input_speeds
                              for action in self.sl_data}
+
+        previous_targets = np.copy(self.target_speeds)
+        target_speeds = np.zeros_like(self.target_speeds)
+        speed = self.end_of_straight_speed * grips_up_straight[0]       # modify by expected grip at end of straight
+        if potential_stop:
+            speed = 0
+            previous_grip = grips_up_straight[min(1, len(grips_up_straight) - 1)]
+            speed = np.nanmax([self.estimate_previous_speed(test_input_speeds,
+                                                            test_input_speeds + test_speed_deltas[action]*previous_grip,
+                                                            speed)
+                               for action in self.sl_data])
+            speed = max(speed, 10)
 
         for i in range(len(self.target_speeds)):
             if np.all(target_speeds[i:] == speed):
@@ -709,7 +763,7 @@ class ProDriver(Driver):
             target_speeds = self.target_speeds
         else:
             # Custom grips provided, need to get custom target speeds to match them
-            target_speeds = self.update_target_speeds(grips_up_straight=grips[::-1], assign_to_self=False)
+            target_speeds = self.update_target_speeds(self.potential_stop, grips_up_straight=grips[::-1], assign_to_self=False)
 
         speeds = np.zeros(distance_ahead)
         break_target_speed = False

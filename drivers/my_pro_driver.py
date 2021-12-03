@@ -399,22 +399,13 @@ class ProDriver(Driver):
         self.lowest_crash_speed = 350
         self.target_speeds = 350 * np.ones(50)
 
-    def update_after_race(self, correct_turns: Dict[Position, Action]):
-        # Called after the race by RaceControl
-        self.correct_turns.update(correct_turns)            # dictionary mapping Position -> TurnLeft or TurnRight
-
     def _choose_turn_direction(self, track_state: TrackState):
         # Check if we need to make a decision about which way to turn
         if track_state.distance_left > 0 and track_state.distance_right > 0:  # both options available, need to decide
-            if len(self.correct_turns) > 0:
-                # Find the closest turn we have seen previously and turn in the same direction
-                distances = np.array([track_state.position.distance_to(turn_position)
-                                      for turn_position in self.correct_turns])
-                i_closest = np.argmin(distances)
-                return list(self.correct_turns.values())[i_closest]
-
-            else:  # First race, no data yet so choose randomly
-                return driver_rng().choice([Action.TurnLeft, Action.TurnRight])
+            self.turn_chooser.t_junction_choose_turn(
+                track_state.position,
+                self.turn_tracker.correct_turns,
+                [track_state.distance_left, track_state.distance_right])
 
         elif track_state.distance_left > 0:  # only left turn
             return Action.TurnLeft
@@ -463,6 +454,8 @@ class ProDriver(Driver):
         self.straight_ends = []
         self.completed_straights = []
         self.weather_tracker.prepare_for_race()
+        # Start new race in the turn tracker
+        self.turn_tracker.new_race()
         # Start new race in the safety car tracker
         self.safety_car_tracker.new_race()
 
@@ -582,6 +575,10 @@ class ProDriver(Driver):
                                    action: Action, new_car_state: CarState, new_track_state: TrackState,
                                    result: ActionResult, previous_weather_state: WeatherState):
 
+        # Update the turn tracker
+        self.turn_tracker.new_track_state(previous_track_state, is_final=False)
+        if result.finished:
+            self.turn_tracker.new_track_state(new_track_state, is_final=True)
         # Update the safety car tracker
         self.safety_car_tracker.action_result(new_car_state, result)
 
@@ -775,3 +772,7 @@ class ProDriver(Driver):
         # Compute time
         time = np.sum(1 / (1 + speeds[:-1]))
         return time
+
+    def update_after_race(self, correct_turns: Dict[Position, Action]):
+        # Check turn tracker validity
+        self.turn_tracker.update_after_race(correct_turns)

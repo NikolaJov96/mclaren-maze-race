@@ -531,7 +531,19 @@ class MyDriver(Driver):
                 self.completed_straights.append(track_state.distance_behind)
 
             self.at_turn = True
-            return self._choose_turn_direction(track_state)
+
+        # Get the current grip level
+        current_grip = self.grip_tracker.get_grip(
+            self.tyre_tracker, self.weather_tracker, car_state, turns_ahead=0, weather_state=weather_state)
+
+        if track_state.distance_ahead == 0:
+            if track_state.distance_left == 0 and track_state.distance_right == 0 and car_state.speed > 0:
+                # Have to stop (in case of a crash we will be back in this state with the speed=0)
+                return self._choose_move_from_models(car_state.speed, 0.0, car_state.drs_active,
+                                                   grip_multiplier=current_grip)
+            else:
+                # Have to turn (in case of a spin we will be back in this state with the speed=0)
+                return self._choose_turn_direction(track_state)
 
         # Update the target speeds at the start of a straight, to take tyre degradation into account. We could do this
         # every move but limit it to avoid slowing code down too much
@@ -551,10 +563,6 @@ class MyDriver(Driver):
 
         # Get the target speed
         target_speed = self._get_target_speed(track_state.distance_ahead, track_state.safety_car_active)
-
-        # Get the current grip level
-        current_grip = self.grip_tracker.get_grip(
-            self.tyre_tracker, self.weather_tracker, car_state, turns_ahead=0, weather_state=weather_state)
 
         # Choose action that gets us closest to target, or choose randomly
         if driver_rng().rand() > self.random_action_probability or track_state.safety_car_active or track_state.distance_ahead < 4:

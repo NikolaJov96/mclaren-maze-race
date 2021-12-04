@@ -1,10 +1,15 @@
-from typing import List
+import numpy as np
 from scipy.interpolate import interp1d, PchipInterpolator
 from scipy.optimize import minimize
 from sklearn.linear_model import LinearRegression
+from typing import Dict, List, Union
 
-from drivers.driver import *
-from drivers.rookiedriver import RookieDriver
+from resources.actions import Action, AeroSetup
+from resources.coordinatesystem import Heading, Position
+from resources.states import *
+from resources.rng import driver_rng
+
+from drivers.driver import Driver
 
 
 class SafetyCarTracker:
@@ -581,6 +586,7 @@ class WeatherTracker:
         x_targets = X[num_previous_steps + 1:, :]
         return x_inputs, x_targets
 
+
 class GripTracker:
 
     def get_grip(
@@ -623,10 +629,8 @@ class GripTracker:
 
 
 class MyDriver(Driver):
-    def __init__(self, name, random_action_probability=0.5, random_action_decay=0.96,
-                 min_random_action_probability=0.0, *args, **kwargs):
-
-        super().__init__(name, *args, **kwargs)
+    def __init__(self, name=None):
+        super().__init__('McLando' if name is None else name)
 
         self.tyre_tracker = TyreTracker()
         self.weather_tracker = WeatherTracker()
@@ -637,9 +641,8 @@ class MyDriver(Driver):
         self.safety_car_tracker = SafetyCarTracker()
         self.safety_car_target_speed = 0
 
-        self.random_action_probability = random_action_probability
-        self.random_action_decay = random_action_decay
-        self.min_random_action_probability = min_random_action_probability
+        self.random_action_probability = 0.5
+        self.random_action_decay = 0.96
 
         self.at_turn = False
         self.move_number = 0
@@ -821,8 +824,7 @@ class MyDriver(Driver):
                     action = Action.OpenDRS
                     self.drs_was_active = True
 
-        self.random_action_probability = max(self.random_action_probability * self.random_action_decay,
-                                             self.min_random_action_probability)
+        self.random_action_probability = self.random_action_probability * self.random_action_decay
 
         return action
 

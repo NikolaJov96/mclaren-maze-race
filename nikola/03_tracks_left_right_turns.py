@@ -58,6 +58,7 @@ if __name__ == '__main__':
             else:
                 ax.plot(position.column, position.row, 'g+')
 
+    plt.grid()
     plt.savefig(os.path.join(path, 'all_left_right_turns.png'))
     plt.close(fig)
 

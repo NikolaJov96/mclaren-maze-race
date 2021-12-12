@@ -813,7 +813,7 @@ class MyDriver(Driver):
             self.last_action_was_random = True
 
         # If DRS is available then need to decide whether to open DRS or not.
-        if track_state.drs_available and not car_state.drs_active and track_state.distance_ahead > 0:
+        if track_state.drs_available and not car_state.drs_active and track_state.distance_ahead > 5:
             # Simulate the straight with and without DRS and check which we think will be faster
             time_no_drs, targets_broken_no_drs, *_ = self.simulate_straight(
                 car_state.speed,

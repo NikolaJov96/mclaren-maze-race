@@ -1,4 +1,27 @@
 # McLaren Maze Race
+
+## The Rookie challenge winning solution
+
+This fork of the McLaren Maze Race repo contains the winning solution for the Rookie Challenge.
+
+Directory `nikola/` includes various testing and probing scripts that start with a number for easier management. It also includes separate modules that tackle different aspects of the challenge. The most useful tool would be the `race_logger.py`, which allows for detailed per-step performance inspection.
+
+![A visual race log](./nikola/race_log.png)
+
+Submitted solutions are placed inside `drivers/` directory together with the original example drivers, starting with `my_`. They are created by combining the above-mentioned modules. Files marked with `_2` are the final submissions, `my_rookie_driver_2.py` being the winning solution.
+
+To pit the first and the second Rookie submission against each other and the original Rookie example, run:
+```
+python3 nikola/46_rookie_submission_1_vs_2.py
+```
+The output will be placed in the `nikola/nikola/46_rookie_submission_1_vs_2/` directory and will include visual race logs for each driver and each race, as well as a text file describing who won which race and what were the times.
+
+Here are the final leaderboards showing the placement of our driver `McLando`:
+
+![Leader board](./nikola/leader_board.jpg)
+
+## Intro
+
 Welcome to the McLaren Maze Race!
 
 This is half a fun introduction to Artificial Intelligence (AI) and Machine Learning suitable for all ages and abilities and half a challenge for anyone who wants to test their AI skills! So whether you are an AI newbie or a total pro you should find something here for you.

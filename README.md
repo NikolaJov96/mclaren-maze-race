@@ -1,6 +1,6 @@
 # McLaren Maze Race
 
-## The Rookie challenge winning solution
+## The Rookie Challenge winning solution
 
 This fork of the McLaren Maze Race repo contains the winning solution for the Rookie Challenge.
 
